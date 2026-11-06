@@ -62,7 +62,6 @@ services:
       - api
     ports:
       - "${WEB_PORT:-8012}:80"
-      - "${SSL_PORT:-443}:443"
     environment:
       DOMAIN: ${DOMAIN:-industri.heylane.in}
     volumes:
