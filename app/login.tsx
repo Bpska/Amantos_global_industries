@@ -126,7 +126,7 @@ export default function Login() {
             <Text style={s.demoLabel}>1-Tap Demo Credentials:</Text>
             <View style={s.demoPillsRow}>
               <Pressable
-                onPress={() => handleDemoFill('admin', 'admin123')}
+                onPress={() => handleDemoFill('admin', 'AdminPassword@123')}
                 style={({ pressed }) => [
                   s.demoPill,
                   pressed && { opacity: 0.75 },

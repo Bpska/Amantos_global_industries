@@ -46,6 +46,31 @@ async function main() {
     console.log(`ℹ️ Admin user already exists (@${existingAdmin.username}). Skipping creation.`);
   }
 
+  // Create Demo Salesperson if none exists
+  const existingSales = await prisma.user.findFirst({
+    where: { username: 'sp_rajesh' },
+  });
+
+  if (!existingSales) {
+    console.log('👤 Creating demo field salesperson...');
+    const salt = await bcrypt.genSalt(10);
+    const salesPasswordHash = await bcrypt.hash('pass123', salt);
+
+    await prisma.user.create({
+      data: {
+        username: 'sp_rajesh',
+        passwordHash: salesPasswordHash,
+        fullName: 'Rajesh Kumar (Field Sales)',
+        phone: '+919876543210',
+        role: Role.SALESPERSON,
+        isActive: true,
+      },
+    });
+    console.log('✅ Demo Salesperson created: username=sp_rajesh / password=pass123');
+  } else {
+    console.log(`ℹ️ Salesperson sp_rajesh already exists.`);
+  }
+
   console.log('🎉 Seeding completed successfully!');
 }
 

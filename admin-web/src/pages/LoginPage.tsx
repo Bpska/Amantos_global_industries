@@ -15,7 +15,7 @@ export const LoginPage: React.FC = () => {
 
   const handleDemoFill = () => {
     setUsername('admin');
-    setPassword('admin123');
+    setPassword('AdminPassword@123');
     setError('');
   };
 
