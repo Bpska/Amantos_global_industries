@@ -9,19 +9,20 @@ FROM node:20-alpine AS admin-builder
 WORKDIR /app
 
 COPY admin-web/package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY admin-web/ ./
 ENV VITE_BASE_PATH=/admin/
 RUN npm run build
 
 # --- Stage 2: Build Seller / Staff Web PWA (Expo Web) ---
-FROM node:20-alpine AS seller-builder
+# Use Node 22 LTS to satisfy Expo 52+ engine requirements (>=22.13.0)
+FROM node:22-alpine AS seller-builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 COPY . ./
 ENV EXPO_PUBLIC_API_URL=https://industri.heylane.in
