@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SALESPERSON
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  role         Role
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdShops     Shop[]    @relation("UserCreatedShops")
+  orders           Order[]   @relation("UserOrders")
+  recordedPayments Payment[] @relation("UserPayments")
+
+  @@map("users")
+}
+
+model Shop {
+  id            String   @id @default(uuid())
+  shopName      String
+  location      String   @db.Text
+  latitude      Float?
+  longitude     Float?
+  ownerName     String
+  contactNumber String
+  createdById   String
+  createdBy     User     @relation("UserCreatedShops", fields: [createdById], references: [id])
+  orders        Order[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([contactNumber])
+  @@index([createdById])
+  @@map("shops")
+}
+
+model Order {
+  id            String    @id @default(uuid())
+  shopId        String
+  shop          Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  salespersonId String
+  salesperson   User      @relation("UserOrders", fields: [salespersonId], references: [id])
+  productName   String    @default("Mixture Pack")
+  quantity      Int
+  unitPrice     Decimal   @db.Decimal(12, 2)
+  totalAmount   Decimal   @db.Decimal(12, 2)
+  amountPaid    Decimal   @db.Decimal(12, 2)
+  balanceDue    Decimal   @db.Decimal(12, 2)
+  billingType   String    @default("ONLINE")
+  visitDate     DateTime  @db.Date
+  visitDay      String
+  notes         String?   @db.Text
+  payments      Payment[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([visitDate])
+  @@index([salespersonId])
+  @@index([shopId])
+  @@map("orders")
+}
+
+model Payment {
+  id           String   @id @default(uuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount       Decimal  @db.Decimal(12, 2)
+  paidOn       DateTime @default(now())
+  note         String?  @db.Text
+  recordedById String
+  recordedBy   User     @relation("UserPayments", fields: [recordedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([orderId])
+  @@index([recordedById])
+  @@map("payments")
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  unitPrice Decimal  @default(0) @db.Decimal(12, 2)
+  category  String?  @default("General")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("products")
+}
+
+model BillingSetting {
+  id           String   @id @default("default")
+  businessName String   @default("AGI")
+  tagline      String?  @default("Wholesale & Retail Replenishment Network")
+  phone        String?  @default("+91 98765 43210")
+  address      String?  @default("Main Commercial Hub")
+  terms        String?  @default("Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.")
+  logoUrl      String?  @default("/assets/agi-logo.jpg")
+  updatedAt    DateTime @updatedAt
+
+  @@map("billing_settings")
+}

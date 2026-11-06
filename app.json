@@ -1,0 +1,33 @@
+{
+    "expo":  {
+                 "name":  "RetailFlow",
+                 "slug":  "retailer-onboarding",
+                 "version":  "1.0.0",
+                 "orientation":  "portrait",
+                 "scheme":  "retailflow",
+                 "userInterfaceStyle":  "automatic",
+                 "ios":  {
+                             "supportsTablet":  true,
+                             "bundleIdentifier":  "com.logisaar.retailflow"
+                         },
+                 "android":  {
+                                 "package":  "com.logisaar.retailflow",
+                                 "adaptiveIcon":  {
+                                                      "backgroundColor":  "#4F46E5"
+                                                  }
+                             },
+                 "plugins":  [
+                                 "expo-router",
+                                 "expo-secure-store",
+                                 [
+                                     "expo-location",
+                                     {
+                                         "locationWhenInUsePermission":  "Allow RetailFlow to use your location for shop addresses."
+                                     }
+                                 ]
+                             ],
+                 "experiments":  {
+                                     "typedRoutes":  true
+                                 }
+             }
+}
