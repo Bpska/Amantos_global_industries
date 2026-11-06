@@ -14,6 +14,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-retailer_db}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${DB_HOST_PORT:-5441}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-retailer_db}"]
       interval: 5s
@@ -44,6 +46,8 @@ services:
       CORS_ORIGIN: https://industri.heylane.in,http://industri.heylane.in,https://www.industri.heylane.in,https://admin.industri.heylane.in
     expose:
       - "5000"
+    ports:
+      - "${API_PORT:-5007}:5000"
     networks:
       - industri_net
 
@@ -59,8 +63,8 @@ services:
     depends_on:
       - api
     ports:
-      - "80:80"
-      - "443:443"
+      - "${WEB_PORT:-8012}:80"
+      - "${SSL_PORT:-443}:443"
     environment:
       DOMAIN: ${DOMAIN:-industri.heylane.in}
     volumes:

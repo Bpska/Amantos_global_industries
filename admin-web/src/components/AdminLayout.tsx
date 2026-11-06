@@ -69,12 +69,19 @@ export const AdminLayout: React.FC = () => {
       {/* Sidebar */}
       <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <div className="sidebar-brand-icon">
-            <Store size={22} />
+          <div className="sidebar-brand-icon" style={{ overflow: 'hidden', padding: 0, border: '1px solid rgba(212, 175, 55, 0.4)' }}>
+            <img
+              src="/assets/agi-logo.jpg"
+              alt="Heylane"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = './assets/agi-logo.jpg';
+              }}
+            />
           </div>
           <div className="sidebar-brand-text">
-            <h1>RetailFlow</h1>
-            <span>ADMIN CONSOLE</span>
+            <h1>Heylane</h1>
+            <span style={{ color: '#D4AF37', fontWeight: 700 }}>INDUSTRI CONSOLE</span>
           </div>
           {/* Mobile close button */}
           <button
@@ -188,8 +195,8 @@ export const AdminLayout: React.FC = () => {
 
             <div>
               <div className="breadcrumb-row">
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  RetailFlow Suite
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Heylane Industri
                 </span>
                 <span style={{ color: '#CBD5E1' }}>/</span>
                 <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>{getPageTitle()}</span>

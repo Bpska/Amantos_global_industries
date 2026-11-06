@@ -25,6 +25,13 @@ In your DNS provider (Cloudflare, GoDaddy, Namecheap, Hostinger, AWS Route53, et
 
 ## 🚀 2. Quick 1-Command Deployment
 
+### 🔌 Assigned Server Host Ports:
+To avoid conflicts with any other Docker apps running on your server, the stack uses these assigned ports:
+* **Frontend Web (Nginx Gateway):** `http://<SERVER_IP>:8012` (Host port `8012` → container port `80`)
+* **Backend API (Direct):** `http://<SERVER_IP>:5007` (Host port `5007` → container port `5000`)
+* **PostgreSQL Database (Direct Host Access):** `<SERVER_IP>:5441` (Host port `5441` → container port `5432`)
+* **SSL / HTTPS:** Port `443` (for `industri.heylane.in`)
+
 On your server/VPS (Ubuntu, Debian, CentOS, or Windows):
 
 ```bash
