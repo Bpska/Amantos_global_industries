@@ -24,8 +24,4 @@ docker compose exec web nginx -s reload
 
 Write-Host "=========================================================" -ForegroundColor Green
 Write-Host "   ✅ SSL Certificate successfully activated!" -ForegroundColor Green
-Write-Host "   Staff Portal:  https://$Domain" -ForegroundColor White
-Write-Host "   Admin Panel:   https://$Domain/admin" -ForegroundColor White
-Write-Host "   Backend API:   https://$Domain/api/v1" -ForegroundColor White
 Write-Host "=========================================================" -ForegroundColor Green
-

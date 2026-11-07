@@ -38,8 +38,4 @@ docker compose exec web nginx -s reload
 
 echo "========================================================="
 echo "   ✅ SSL Certificate successfully activated!"
-echo "   Staff Portal:  https://$DOMAIN"
-echo "   Admin Panel:   https://$DOMAIN/admin"
-echo "   Backend API:   https://$DOMAIN/api/v1"
 echo "========================================================="
-

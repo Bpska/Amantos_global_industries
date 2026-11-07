@@ -5,7 +5,9 @@ node_modules
 .github
 .gemini
 dist
+*/dist
 .expo
+*/.expo
 .vscode
 .idea
 *.log
