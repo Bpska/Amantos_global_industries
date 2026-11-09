@@ -4,6 +4,7 @@ import {
   UserPlus,
   KeyRound,
   Edit2,
+  Trash2,
   Check,
   Copy,
   RefreshCw,
@@ -153,6 +154,19 @@ export const SalespersonsPage: React.FC = () => {
       setCopied(false);
     } catch (e: any) {
       alert(e.response?.data?.message || 'Failed to reset password.');
+    }
+  };
+
+  const handleDeleteStaff = async (user: User) => {
+    if (!window.confirm(`Are you sure you want to permanently delete staff member "${user.name}" (@${user.username})?`)) {
+      return;
+    }
+
+    try {
+      await api.deleteSalesperson(user.id);
+      fetchSalespersons();
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete staff member.');
     }
   };
 
@@ -415,6 +429,16 @@ export const SalespersonsPage: React.FC = () => {
                           >
                             <KeyRound size={13} />
                             <span>Reset Pass</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStaff(rep)}
+                            className="btn btn-outline"
+                            style={{ padding: '5px 10px', fontSize: '12px', gap: '4px', color: '#DC2626', borderColor: '#FECACA' }}
+                            title="Delete Staff Member"
+                          >
+                            <Trash2 size={13} />
+                            <span>Delete</span>
                           </button>
                         </div>
                       </td>

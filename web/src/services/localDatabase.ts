@@ -41,13 +41,14 @@ const setStore = (key: string, val: any): void => {
 };
 
 // Seed initial dataset
-const INITIAL_USERS: (User & { passwordHash?: string })[] = [
+const INITIAL_USERS: User[] = [
   {
     id: 'user_admin',
     username: 'admin',
     name: 'System Administrator',
     role: 'ADMIN',
     phone: '+91 99999 00000',
+    password: 'AdminPassword@123',
     active: true,
   },
   {
@@ -56,6 +57,7 @@ const INITIAL_USERS: (User & { passwordHash?: string })[] = [
     name: 'Rajesh Mohapatra',
     role: 'SALESPERSON',
     phone: '+91 98610 11223',
+    password: 'Sales@123Rajesh',
     active: true,
   },
   {
@@ -64,6 +66,7 @@ const INITIAL_USERS: (User & { passwordHash?: string })[] = [
     name: 'Amit Kumar Rout',
     role: 'SALESPERSON',
     phone: '+91 94370 22334',
+    password: 'Sales@123Amit',
     active: true,
   },
   {
@@ -72,6 +75,7 @@ const INITIAL_USERS: (User & { passwordHash?: string })[] = [
     name: 'Priya Das',
     role: 'SALESPERSON',
     phone: '+91 97780 33445',
+    password: 'Sales@123Priya',
     active: true,
   },
 ];
@@ -484,6 +488,14 @@ export const localDb = {
       throw new Error('Account deactivated. Please contact your system administrator.');
     }
 
+    // Verify password if provided or if the account has a configured password
+    if (credentials.password !== undefined && credentials.password !== '') {
+      const expectedPassword = found.password || (found.role === 'ADMIN' ? 'AdminPassword@123' : 'Sales@123');
+      if (found.password && credentials.password !== expectedPassword) {
+        throw new Error('Incorrect password. Please verify your credentials.');
+      }
+    }
+
     const token = `pwa_token_${found.id}_${Date.now()}`;
     const userPayload: User = { ...found };
 
@@ -549,14 +561,27 @@ export const localDb = {
       })
       .sort((a, b) => b.totalSales - a.totalSales);
 
-    // Recent shops and top BAKI
-    const recentShops = [...shops]
+    // Recent shops and top BAKI computed from live orders
+    const liveShops = shops.map((shop) => {
+      const shopOrders = filteredOrders.filter((o) => o.shopId === shop.id);
+      const totalAmount = shopOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+      const paidAmount = shopOrders.reduce((sum, o) => sum + Number(o.paidAmount || 0), 0);
+      const baki = Math.max(0, totalAmount - paidAmount);
+      return {
+        ...shop,
+        totalAmount,
+        paidAmount,
+        baki,
+      };
+    });
+
+    const recentShops = [...liveShops]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
 
-    const topBakiShops = [...shops]
-      .sort((a, b) => Number(b.baki || 0) - Number(a.baki || 0))
+    const topBakiShops = [...liveShops]
       .filter((s) => Number(s.baki) > 0)
+      .sort((a, b) => Number(b.baki || 0) - Number(a.baki || 0))
       .slice(0, 5);
 
     return {
@@ -744,6 +769,24 @@ export const localDb = {
     return this.getShopById(newId);
   },
 
+  async deleteShop(id: string): Promise<{ success: boolean; message: string }> {
+    initLocalDatabase();
+    requireAdmin();
+    let shops = getStore<Shop[]>(STORAGE_KEYS.SHOPS, INITIAL_SHOPS);
+    const shop = shops.find((s) => s.id === id);
+    if (!shop) throw new Error('Business retailer not found.');
+
+    shops = shops.filter((s) => s.id !== id);
+    setStore(STORAGE_KEYS.SHOPS, shops);
+
+    // Also remove associated orders and payments for this shop
+    let orders = getStore<Order[]>(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
+    orders = orders.filter((o) => o.shopId !== id);
+    setStore(STORAGE_KEYS.ORDERS, orders);
+
+    return { success: true, message: `Business '${shop.name}' removed successfully.` };
+  },
+
   // Orders and BAKI collection
   async addOrder(
     shopId: string,
@@ -873,11 +916,14 @@ export const localDb = {
       throw new Error(`Username '${payload.username}' is already taken.`);
     }
 
+    const initialPassword = payload.password?.trim() || 'Sales@123';
+
     const newUser: User = {
       id: `user_${Date.now()}`,
       username: payload.username.trim(),
       name: payload.name.trim(),
       phone: payload.phone.trim(),
+      password: initialPassword,
       role: 'SALESPERSON',
       active: true,
       totalShops: 0,
@@ -911,9 +957,32 @@ export const localDb = {
     return updated;
   },
 
-  async resetPassword(_id: string, _newPassword?: string): Promise<{ success: boolean; message: string }> {
+  async deleteSalesperson(id: string): Promise<{ success: boolean; message: string }> {
+    initLocalDatabase();
     requireAdmin();
-    return { success: true, message: 'Password reset successfully in local store.' };
+    let users = getStore<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const target = users.find((u) => u.id === id);
+    if (!target) throw new Error('Sales representative not found.');
+    if (target.role === 'ADMIN') throw new Error('Admin accounts cannot be deleted.');
+
+    users = users.filter((u) => u.id !== id);
+    setStore(STORAGE_KEYS.USERS, users);
+    return { success: true, message: `Staff representative '${target.name}' removed successfully.` };
+  },
+
+  async resetPassword(id: string, newPassword?: string): Promise<{ success: boolean; message: string }> {
+    requireAdmin();
+    const users = getStore<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx === -1) throw new Error('Salesperson not found.');
+
+    const updatedPass = newPassword?.trim() || 'Sales@123';
+    users[idx] = {
+      ...users[idx],
+      password: updatedPass,
+    };
+    setStore(STORAGE_KEYS.USERS, users);
+    return { success: true, message: `Password reset successfully. New password is ${updatedPass}` };
   },
 
   // Orders / Reports
@@ -991,6 +1060,122 @@ export const localDb = {
     ]);
 
     return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  },
+
+  async exportRetailersExcel(): Promise<string> {
+    initLocalDatabase();
+    const shopsRes = await this.getShops({ limit: 10000 });
+    const shops = shopsRes.data;
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
+  </Style>
+  <Style ss:ID="Header">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#007F5F"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#007F5F" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="Currency">
+   <NumberFormat ss:Format="&quot;₹&quot;#,##0.00"/>
+   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="BakiDue">
+   <NumberFormat ss:Format="&quot;₹&quot;#,##0.00"/>
+   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#DC2626"/>
+  </Style>
+  <Style ss:ID="Paid">
+   <NumberFormat ss:Format="&quot;₹&quot;#,##0.00"/>
+   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#10B981"/>
+  </Style>
+  <Style ss:ID="Title">
+   <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1" ss:Color="#0F172A"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Retailer Directory">
+  <Table>
+   <Column ss:Width="70"/>
+   <Column ss:Width="200"/>
+   <Column ss:Width="140"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="220"/>
+   <Column ss:Width="160"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="90"/>
+   <Row ss:Height="24">
+    <Cell ss:MergeAcross="10" ss:StyleID="Title"><Data ss:Type="String">Amantos Global Industries — Retailer Master Directory</Data></Cell>
+   </Row>
+   <Row ss:Height="20">
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Shop ID</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Retail Store Name</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Proprietor Name</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Contact Number</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Store Location / Address</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Assigned Sales Representative</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Onboarded Date</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Total Billed</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Total Collected</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Outstanding BAKI</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">Ledger Status</Data></Cell>
+   </Row>`;
+
+    for (const shop of shops) {
+      const isPaid = shop.baki === 0;
+      const isPartial = shop.baki > 0 && shop.paidAmount > 0;
+      const statusText = isPaid ? 'Settled' : isPartial ? 'Partial BAKI' : 'Full Credit';
+      const cleanDate = shop.createdAt ? shop.createdAt.slice(0, 10) : '';
+      const repName = shop.salesperson ? `${shop.salesperson.name} (@${shop.salesperson.username})` : 'Unassigned';
+
+      // Safe XML escape
+      const escapeXml = (str: string) => String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+
+      xml += `
+   <Row ss:Height="18">
+    <Cell><Data ss:Type="String">${escapeXml(shop.id)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(shop.name)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(shop.ownerName)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(shop.contactNumber)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(shop.location)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(repName)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(cleanDate)}</Data></Cell>
+    <Cell ss:StyleID="Currency"><Data ss:Type="Number">${Number(shop.totalAmount || 0)}</Data></Cell>
+    <Cell ss:StyleID="Paid"><Data ss:Type="Number">${Number(shop.paidAmount || 0)}</Data></Cell>
+    <Cell ss:StyleID="${shop.baki > 0 ? 'BakiDue' : 'Paid'}"><Data ss:Type="Number">${Number(shop.baki || 0)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(statusText)}</Data></Cell>
+   </Row>`;
+    }
+
+    xml += `
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+    return xml;
   },
 
   // Products

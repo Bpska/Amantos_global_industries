@@ -5,6 +5,7 @@ export interface User {
   username: string;
   name: string;
   phone?: string;
+  password?: string;
   role: Role;
   active?: boolean;
   totalShops?: number;

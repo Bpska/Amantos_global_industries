@@ -105,6 +105,10 @@ export const api = {
     return localDb.createShop(payload);
   },
 
+  async deleteShop(id: string): Promise<{ success: boolean; message: string }> {
+    return localDb.deleteShop(id);
+  },
+
   async addOrder(
     shopId: string,
     payload: { product: string; quantity: number; unitPrice: number; notes?: string }
@@ -161,6 +165,10 @@ export const api = {
     return localDb.updateSalesperson(id, payload);
   },
 
+  async deleteSalesperson(id: string): Promise<{ success: boolean; message: string }> {
+    return localDb.deleteSalesperson(id);
+  },
+
   async resetPassword(id: string, newPassword?: string): Promise<{ success: boolean; message: string }> {
     return localDb.resetPassword(id, newPassword);
   },
@@ -181,6 +189,10 @@ export const api = {
 
   async exportCsv(params: { from?: string; to?: string }): Promise<string> {
     return localDb.exportCsv(params);
+  },
+
+  async exportRetailersExcel(): Promise<string> {
+    return localDb.exportRetailersExcel();
   },
 
   // Product Catalog

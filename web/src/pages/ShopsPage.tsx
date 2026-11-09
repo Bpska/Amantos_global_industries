@@ -14,6 +14,9 @@ import {
   Phone,
   MapPin,
   Eye,
+  Trash2,
+  Navigation,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +42,7 @@ export const ShopsPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   // Shop details drawer
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
@@ -58,11 +62,59 @@ export const ShopsPage: React.FC = () => {
   const [newOwnerName, setNewOwnerName] = useState('');
   const [newContact, setNewContact] = useState('');
   const [newLocation, setNewLocation] = useState('');
+  const [fetchingGps, setFetchingGps] = useState(false);
   const [newRepId, setNewRepId] = useState('');
   const [newProduct, setNewProduct] = useState('Mixture Pack 500g');
   const [newQty, setNewQty] = useState('100');
   const [newPrice, setNewPrice] = useState('120');
   const [newPaid, setNewPaid] = useState('0');
+
+  // GPS auto-fetch location
+  const handleAutoFetchLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser or device.');
+      return;
+    }
+    setFetchingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          // Attempt reverse geocoding via OpenStreetMap Nominatim
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const displayName = data.display_name || `${data.address?.suburb || data.address?.road || ''}, ${data.address?.city || data.address?.town || 'Bhubaneswar'}`;
+            setNewLocation(displayName.trim());
+          } else {
+            setNewLocation(`GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+          }
+        } catch {
+          setNewLocation(`GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+        } finally {
+          setFetchingGps(false);
+        }
+      },
+      (err) => {
+        setFetchingGps(false);
+        let msg = 'Unable to fetch your location. Please check GPS permission.';
+        if (err.code === 1) msg = 'Location access permission was denied. Please allow GPS permission in your browser.';
+        else if (err.code === 2) msg = 'Location unavailable. Ensure GPS is turned on.';
+        else if (err.code === 3) msg = 'Location request timed out.';
+        alert(msg);
+      },
+      { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 }
+    );
+  };
+
+  // Automatically trigger GPS fetch when opening Onboard Modal as Staff
+  useEffect(() => {
+    if (createModalOpen && !newLocation) {
+      handleAutoFetchLocation();
+    }
+  }, [createModalOpen]);
 
   const handleCreateShop = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +143,26 @@ export const ShopsPage: React.FC = () => {
       await fetchShops();
     } catch (err: any) {
       alert(err.message || 'Failed to onboard retailer');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteShop = async (shop: Shop) => {
+    if (!isAdmin) return;
+    if (!window.confirm(`Are you sure you want to permanently remove "${shop.name}" and all its invoices/records?`)) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await api.deleteShop(shop.id);
+      if (selectedShop?.id === shop.id) {
+        setSelectedShop(null);
+      }
+      await fetchShops();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete business retailer.');
     } finally {
       setActionLoading(false);
     }
@@ -147,6 +219,27 @@ export const ShopsPage: React.FC = () => {
     e.preventDefault();
     setPage(1);
     fetchShops();
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      setExportingExcel(true);
+      const xmlData = await api.exportRetailersExcel();
+      const blob = new Blob([xmlData], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateTag = new Date().toISOString().slice(0, 10);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `retailer-master-directory-${dateTag}.xls`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message || 'Failed to download Excel file.');
+    } finally {
+      setExportingExcel(false);
+    }
   };
 
   const openShopDetails = async (id: string) => {
@@ -236,7 +329,26 @@ export const ShopsPage: React.FC = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={exportingExcel}
+              className="btn btn-outline"
+              style={{
+                gap: '6px',
+                borderColor: '#007F5F',
+                color: '#007F5F',
+                backgroundColor: '#F0FDF4',
+                fontWeight: 700,
+              }}
+              title="Download all retailer master data in Excel format"
+            >
+              <FileSpreadsheet size={16} color="#007F5F" />
+              <span>{exportingExcel ? 'Exporting…' : 'Download Excel (.xls)'}</span>
+            </button>
+          )}
           <button onClick={() => setCreateModalOpen(true)} className="btn btn-primary" style={{ gap: '6px' }}>
             <PlusCircle size={15} />
             <span>Onboard Retailer</span>
@@ -442,9 +554,14 @@ export const ShopsPage: React.FC = () => {
                         </div>
                       </td>
                       <td>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#007F5F' }}>
+                        <div style={{ fontWeight: 800, color: '#007F5F' }}>
                           {shop.salesperson?.name || 'Field Rep'}
-                        </span>
+                        </div>
+                        {shop.salesperson?.username && (
+                          <div style={{ fontSize: '11px', color: '#64748B' }}>
+                            @{shop.salesperson.username}
+                          </div>
+                        )}
                       </td>
                       <td style={{ fontWeight: 800 }}>{formatMoney(shop.totalAmount)}</td>
                       <td style={{ fontWeight: 800, color: '#10B981' }}>{formatMoney(shop.paidAmount)}</td>
@@ -459,13 +576,27 @@ export const ShopsPage: React.FC = () => {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button
-                          onClick={() => openShopDetails(shop.id)}
-                          className="btn btn-outline"
-                          style={{ padding: '6px 12px', fontSize: '12px' }}
-                        >
-                          <span>View Details</span>
-                        </button>
+                        <div style={{ display: 'inline-flex', gap: '6px' }}>
+                          <button
+                            onClick={() => openShopDetails(shop.id)}
+                            className="btn btn-outline"
+                            style={{ padding: '6px 12px', fontSize: '12px' }}
+                          >
+                            <span>View Details</span>
+                          </button>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteShop(shop)}
+                              className="btn btn-outline"
+                              style={{ padding: '6px 10px', fontSize: '12px', color: '#DC2626', borderColor: '#FECACA' }}
+                              title="Delete Business Account"
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -539,8 +670,8 @@ export const ShopsPage: React.FC = () => {
                         <Phone size={13} />
                         <span>+91 {shop.contactNumber}</span>
                       </a>
-                      <span style={{ fontSize: '11px', color: '#64748B' }}>
-                        Rep: {shop.salesperson?.name?.split(' ')[0] || 'Field'}
+                      <span style={{ fontSize: '11px', color: '#007F5F', fontWeight: 700 }}>
+                        Rep: {shop.salesperson?.name || 'Field'} {shop.salesperson?.username ? `(@${shop.salesperson.username})` : ''}
                       </span>
                     </div>
                   </div>
@@ -598,6 +729,18 @@ export const ShopsPage: React.FC = () => {
                       <Eye size={13} />
                       <span>Details</span>
                     </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteShop(shop)}
+                        className="btn btn-outline mobile-card-btn"
+                        style={{ color: '#DC2626', borderColor: '#FECACA' }}
+                        title="Delete Business"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -676,9 +819,15 @@ export const ShopsPage: React.FC = () => {
                   <div style={{ fontSize: '12px', color: '#64748B', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
                     <span>Proprietor: <strong>{selectedShop.ownerName}</strong> · +91 {selectedShop.contactNumber}</span>
                     <span style={{ color: '#CBD5E1' }}>•</span>
+                    <span style={{ color: '#475569', fontWeight: 600 }}>📍 {selectedShop.location}</span>
+                    <span style={{ color: '#CBD5E1' }}>•</span>
                     <span style={{ color: '#007F5F', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <Calendar size={13} />
                       <span>Onboarded: {formatFullDayDate(selectedShop.createdAt)}</span>
+                    </span>
+                    <span style={{ color: '#CBD5E1' }}>•</span>
+                    <span style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontWeight: 800, fontSize: '11px', border: '1px solid #BBF7D0' }}>
+                      Staff: {selectedShop.salesperson?.name || 'Assigned Representative'} (@{selectedShop.salesperson?.username || 'rep'})
                     </span>
                   </div>
                 </div>
@@ -752,6 +901,17 @@ export const ShopsPage: React.FC = () => {
                   <Banknote size={16} />
                   <span>Record BAKI Collection</span>
                 </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDeleteShop(selectedShop)}
+                    className="btn btn-outline"
+                    style={{ flex: '1 1 120px', gap: '6px', color: '#DC2626', borderColor: '#FECACA' }}
+                    title="Delete this store account and orders"
+                  >
+                    <Trash2 size={16} />
+                    <span>Delete Merchant</span>
+                  </button>
+                )}
               </div>
 
               {/* Order History Table */}
@@ -1081,7 +1241,28 @@ export const ShopsPage: React.FC = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Location / Address</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Location / Address</label>
+                    <button
+                      type="button"
+                      onClick={handleAutoFetchLocation}
+                      disabled={fetchingGps}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#007F5F',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Navigation size={12} className={fetchingGps ? 'animate-spin' : ''} />
+                      <span>{fetchingGps ? 'Detecting GPS…' : 'Fetch Current GPS'}</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     className="form-input"

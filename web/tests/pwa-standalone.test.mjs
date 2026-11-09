@@ -154,4 +154,84 @@ test('PWA Standalone: Retailer onboarding date and billing creation date include
   assert.ok(!isNaN(billingDate.getTime()), 'Order billing date should be valid Date');
 });
 
+test('PWA Standalone: Admin creates a new staff member and the new staff can log in with their password', async () => {
+  // Sign in as Admin
+  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+
+  // Onboard new salesperson with custom credentials
+  const newRep = await localDb.createSalesperson({
+    name: 'Santosh Kumar',
+    username: 'sp_santosh',
+    phone: '9861234567',
+    password: 'Password@Santosh123',
+  });
+  assert.equal(newRep.username, 'sp_santosh');
+  assert.equal(newRep.role, 'SALESPERSON');
+
+  // Verify wrong password fails
+  await assert.rejects(
+    api.login({ username: 'sp_santosh', password: 'WrongPassword' }),
+    /Incorrect password/
+  );
+
+  // Verify correct password succeeds and returns SALESPERSON role
+  const loginRes = await api.login({ username: 'sp_santosh', password: 'Password@Santosh123' });
+  assert.equal(loginRes.user.username, 'sp_santosh');
+  assert.equal(loginRes.user.role, 'SALESPERSON');
+
+  // Admin resets password
+  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  await localDb.resetPassword(newRep.id, 'NewPass@2026');
+
+  // New staff logs in with reset password
+  const resetLogin = await api.login({ username: 'sp_santosh', password: 'NewPass@2026' });
+  assert.equal(resetLogin.user.username, 'sp_santosh');
+  assert.equal(resetLogin.user.role, 'SALESPERSON');
+});
+
+test('PWA Standalone: Admin can delete staff and delete business retailer', async () => {
+  // Sign in as Admin
+  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+
+  // 1. Create a staff and then delete it
+  const tempStaff = await localDb.createSalesperson({
+    name: 'Temporary Staff',
+    username: 'sp_temp',
+    phone: '9861999999',
+    password: 'Temp@Password123',
+  });
+  const staffListBefore = await api.getSalespersons();
+  assert.ok(staffListBefore.some((s) => s.id === tempStaff.id));
+
+  await api.deleteSalesperson(tempStaff.id);
+  const staffListAfter = await api.getSalespersons();
+  assert.ok(!staffListAfter.some((s) => s.id === tempStaff.id));
+
+  // 2. Create a retailer and then delete it
+  const tempShop = await api.createShop({
+    name: 'Shop To Delete',
+    ownerName: 'Delete Owner',
+    contactNumber: '9988776655',
+    location: 'Plot 99, Cuttack',
+  });
+  const shopsBefore = await api.getShops({ limit: 100 });
+  assert.ok(shopsBefore.data.some((s) => s.id === tempShop.id));
+
+  await api.deleteShop(tempShop.id);
+  const shopsAfter = await api.getShops({ limit: 100 });
+  assert.ok(!shopsAfter.data.some((s) => s.id === tempShop.id));
+});
+
+test('PWA Standalone: Admin can export all retailer data in Excel format', async () => {
+  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  const excelXml = await api.exportRetailersExcel();
+  assert.match(excelXml, /urn:schemas-microsoft-com:office:spreadsheet/);
+  assert.match(excelXml, /Retailer Master Directory/);
+  assert.match(excelXml, /Maa Tarini Store/);
+  assert.match(excelXml, /Total Billed/);
+  assert.match(excelXml, /Outstanding BAKI/);
+});
+
+
+
 
