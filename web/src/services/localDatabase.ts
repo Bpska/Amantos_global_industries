@@ -398,11 +398,15 @@ export const initLocalDatabase = (): void => {
     localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     localStorage.setItem('retailflow_agi_migrated', 'true');
   } else {
-    // If an existing session had previous seed users, ensure admin password is admin@123
+    // Ensure admin user exists and password is admin@123
     const users = getStore<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-    const adminUser = users.find((u) => u.username === 'admin');
-    if (adminUser && adminUser.password !== 'admin@123') {
+    let adminUser = users.find((u) => u.username === 'admin');
+    if (!adminUser) {
+      users.unshift(INITIAL_USERS[0]);
+      setStore(STORAGE_KEYS.USERS, users);
+    } else if (adminUser.password !== 'admin@123' || adminUser.active === false) {
       adminUser.password = 'admin@123';
+      adminUser.active = true;
       setStore(STORAGE_KEYS.USERS, users);
     }
   }

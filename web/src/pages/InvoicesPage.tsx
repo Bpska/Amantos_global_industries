@@ -17,6 +17,7 @@ import {
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { exportInvoiceToPdf } from '../utils/generateInvoicePdf';
+import { sendInvoicePdfToWhatsApp } from '../utils/generateInvoiceDirectPdf';
 import { formatDayAndDate, formatFullDayDate } from '../utils/dateUtils';
 import type { BillingSetting, Order } from '../types';
 
@@ -285,37 +286,13 @@ export const InvoicesPage: React.FC = () => {
     if (!isAdmin) return;
     try {
       setGeneratingPdf(true);
-      const invNo = getInvoiceNumber(order);
-      let element = document.getElementById('printable-invoice');
-
-      if (!element || activeInvoice?.id !== order.id) {
-        setActiveInvoice(order);
-        await new Promise((r) => setTimeout(r, 120));
-        element = document.getElementById('printable-invoice');
-      }
-
-      if (element) {
-        const { file, download } = await exportInvoiceToPdf(element, invNo);
-
-        // Check if Web Share API with files is supported (mobile Android/iOS Chrome, Safari)
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              title: `${billingSettings.businessName} - Invoice ${invNo}`,
-              text: generateWhatsAppMessage(order),
-              files: [file],
-            });
-            return;
-          } catch (shareErr: any) {
-            if (shareErr.name === 'AbortError') return;
-          }
-        }
-
-        // Fallback: trigger PDF download to device and open WhatsApp chat
-        download();
-      }
-
-      handleSendWhatsApp(order);
+      const shopInfo = {
+        name: order.shop?.name || 'Retail Merchant',
+        ownerName: order.shop?.ownerName,
+        contactNumber: order.shop?.contactNumber,
+        location: order.shop?.location,
+      };
+      await sendInvoicePdfToWhatsApp(order, shopInfo, billingSettings);
     } catch (err) {
       console.error('Failed to share PDF:', err);
       handleSendWhatsApp(order);

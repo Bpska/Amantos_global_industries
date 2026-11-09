@@ -21,6 +21,7 @@ import {
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDayAndDate, formatFullDayDate } from '../utils/dateUtils';
+import { sendInvoicePdfToWhatsApp } from '../utils/generateInvoiceDirectPdf';
 import type { BillingSetting, Shop, User as UserType } from '../types';
 
 export const ShopsPage: React.FC = () => {
@@ -293,21 +294,22 @@ export const ShopsPage: React.FC = () => {
       let remaining = Number(payAmount);
       const totalDue = dueOrders.reduce((sum, order) => sum + order.baki, 0);
       if (!Number.isFinite(remaining) || remaining <= 0 || remaining > totalDue) {
-        throw new Error('Enter an amount greater than zero and no more than the outstanding balance.');
+        throw new Error(`Enter an amount greater than zero and no more than the outstanding balance (₹${totalDue}).`);
       }
       for (const order of dueOrders) {
         if (remaining <= 0) break;
         const amount = Math.min(remaining, order.baki);
-        await api.payOrder(order.id, amount);
+        await api.payOrder(order.id, amount, 'BAKI collection recorded via Merchant Ledger');
         remaining -= amount;
       }
       setActionModal(null);
       setPayAmount('');
       await openShopDetails(selectedShop.id);
-      fetchShops();
+      await fetchShops();
       alert('Payment collected and updated in store ledger.');
     } catch (e: any) {
-      alert(e.message || 'Failed to record payment');
+      const msg = e.response?.data?.message || e.message || 'Failed to record payment';
+      alert(msg);
     } finally {
       setActionLoading(false);
     }
@@ -977,40 +979,11 @@ export const ShopsPage: React.FC = () => {
                               }}>
                                 📄 Physical Bill
                               </span>
-                            ) : isAdmin ? (
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (!isAdmin) return;
-                                  const invNo = o.invoiceNumber || `INV-${new Date(o.date).getFullYear()}-${o.id.slice(0, 6).toUpperCase()}`;
-                                  const dateStr = formatFullDayDate(o.date);
-                                  const brandTitle = (billingSettings?.businessName || 'Amantos Global Industries').toUpperCase();
-                                  const text = 
-`🧾 *${brandTitle}*
-━━━━━━━━━━━━━━━━━━━━
-📄 *Tax Invoice / Cash Memo:* ${invNo}
-📅 *Billing Day & Date:* ${dateStr}
-🏪 *Store:* ${selectedShop.name}
-👤 *Proprietor:* ${selectedShop.ownerName}
-📞 *Mobile:* +91 ${selectedShop.contactNumber}
-📍 *Location:* ${selectedShop.location}
-━━━━━━━━━━━━━━━━━━━━
-📦 *DISPATCH DETAILS:*
-• Item: *${o.product}*
-• Quantity: *${o.quantity} units*
-• Unit Rate: *₹${Number(o.unitPrice || 0).toFixed(2)}*
-• Total Invoiced: *₹${Number(o.totalAmount || 0).toFixed(2)}*
-━━━━━━━━━━━━━━━━━━━━
-💰 *PAYMENT BREAKDOWN:*
-• Paid Amount: *₹${Number(o.paidAmount || 0).toFixed(2)}*
-• Balance Due (BAKI): *₹${Number(o.baki || 0).toFixed(2)}*
-• Status: *${o.baki === 0 ? '✅ FULLY PAID' : (o.paidAmount > 0 ? '⚠️ PARTIAL' : '🔴 UNPAID / DUE')}*
-━━━━━━━━━━━━━━━━━━━━
-📄 *Digital Bill:* Official PDF Tax Invoice generated.
-🙏 Thank you for your business! Reach out to your sales executive for repeat orders.`;
-                                  const cleanPhone = (selectedShop.contactNumber || '').replace(/[^0-9]/g, '');
-                                  const p = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-                                  window.open(`https://wa.me/${p}?text=${encodeURIComponent(text)}`, '_blank');
+                                  sendInvoicePdfToWhatsApp(o, selectedShop, billingSettings);
                                 }}
                                 style={{
                                   backgroundColor: '#25D366',
@@ -1025,12 +998,12 @@ export const ShopsPage: React.FC = () => {
                                   alignItems: 'center',
                                   gap: '4px',
                                 }}
-                                title="Send invoice to retailer WhatsApp"
+                                title="Send invoice PDF directly to retailer WhatsApp"
                               >
                                 <Send size={11} />
-                                <span>WhatsApp</span>
+                                <span>WhatsApp PDF</span>
                               </button>
-                            ) : null}
+                            )}
                           </td>
                         </tr>
                       ))
