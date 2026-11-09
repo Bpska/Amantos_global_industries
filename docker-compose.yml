@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: bps
       POSTGRES_DB: retailer_db
     ports:
-      - "${DB_HOST_PORT:-5441}:5432"
+      - "${DB_HOST_PORT:-2346}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -27,7 +27,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${API_PORT:-5007}:5000"
+      - "${API_PORT:-4898}:5000"
     environment:
       DATABASE_URL: postgresql://postgres:bps@postgres:5432/retailer_db?schema=public
       PORT: 5000

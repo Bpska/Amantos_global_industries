@@ -6,18 +6,20 @@ services:
     container_name: retailer_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: retailer_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bps}
+      POSTGRES_DB: ${POSTGRES_DB:-retailer_db}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-2346}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d retailer_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-retailer_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - retailer_network
 
   api:
     build:
@@ -29,17 +31,22 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "5000:5000"
+      - "${PORT:-4898}:5000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/retailer_db?schema=public
+      NODE_ENV: production
       PORT: 5000
-      JWT_SECRET: super-secret-jwt-key-retailer-onboarding-2026
-      ADMIN_SEED_USERNAME: admin
-      ADMIN_SEED_PASSWORD: AdminPassword@123
-    volumes:
-      - .:/app
-      - /app/node_modules
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-bps}@postgres:5432/${POSTGRES_DB:-retailer_db}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-industri-jwt-production-secret-token-key-2026-heylane}
+      ADMIN_SEED_USERNAME: ${ADMIN_SEED_USERNAME:-admin}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-admin@123}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    networks:
+      - retailer_network
 
 volumes:
   pgdata:
     driver: local
+
+networks:
+  retailer_network:
+    driver: bridge
