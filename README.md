@@ -19,8 +19,8 @@ Both roles use the same login screen:
 
 | Role | Username | Password |
 | --- | --- | --- |
-| Admin | `admin` | `AdminPassword@123` |
-| Field representative | `sp_rajesh` | `Sales@123Rajesh` |
+| Admin | `admin` | `admin@123` |
+| Staff (Created by Admin) | Custom handle | Assigned by Admin |
 
 Admin login opens `/admin` with the executive dashboard, all retailers, products,
 team management, invoices, and reports. Staff login opens `/staff` with a personal

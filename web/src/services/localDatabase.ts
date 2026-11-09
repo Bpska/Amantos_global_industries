@@ -10,7 +10,7 @@ import type {
 } from '../types';
 
 const STORAGE_KEYS = {
-  INITIALIZED: 'heylane_pwa_init_v2',
+  INITIALIZED: 'heylane_pwa_init_v3',
   USERS: 'heylane_pwa_users',
   PRODUCTS: 'heylane_pwa_products',
   SHOPS: 'heylane_pwa_shops',
@@ -40,7 +40,7 @@ const setStore = (key: string, val: any): void => {
   }
 };
 
-// Seed initial dataset
+// Seed initial dataset - ONLY Admin account, no dummy staff
 const INITIAL_USERS: User[] = [
   {
     id: 'user_admin',
@@ -48,34 +48,7 @@ const INITIAL_USERS: User[] = [
     name: 'System Administrator',
     role: 'ADMIN',
     phone: '+91 99999 00000',
-    password: 'AdminPassword@123',
-    active: true,
-  },
-  {
-    id: 'user_rajesh',
-    username: 'sp_rajesh',
-    name: 'Rajesh Mohapatra',
-    role: 'SALESPERSON',
-    phone: '+91 98610 11223',
-    password: 'Sales@123Rajesh',
-    active: true,
-  },
-  {
-    id: 'user_amit',
-    username: 'sp_amit',
-    name: 'Amit Kumar Rout',
-    role: 'SALESPERSON',
-    phone: '+91 94370 22334',
-    password: 'Sales@123Amit',
-    active: true,
-  },
-  {
-    id: 'user_priya',
-    username: 'sp_priya',
-    name: 'Priya Das',
-    role: 'SALESPERSON',
-    phone: '+91 97780 33445',
-    password: 'Sales@123Priya',
+    password: 'admin@123',
     active: true,
   },
 ];
@@ -425,11 +398,12 @@ export const initLocalDatabase = (): void => {
     localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     localStorage.setItem('retailflow_agi_migrated', 'true');
   } else {
-    // Automatically migrate old default HeyLane settings to Amantos Global Industries once
-    const migrated = localStorage.getItem('retailflow_agi_migrated');
-    if (!migrated) {
-      setStore(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
-      localStorage.setItem('retailflow_agi_migrated', 'true');
+    // If an existing session had previous seed users, ensure admin password is admin@123
+    const users = getStore<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const adminUser = users.find((u) => u.username === 'admin');
+    if (adminUser && adminUser.password !== 'admin@123') {
+      adminUser.password = 'admin@123';
+      setStore(STORAGE_KEYS.USERS, users);
     }
   }
 };
@@ -490,7 +464,7 @@ export const localDb = {
 
     // Verify password if provided or if the account has a configured password
     if (credentials.password !== undefined && credentials.password !== '') {
-      const expectedPassword = found.password || (found.role === 'ADMIN' ? 'AdminPassword@123' : 'Sales@123');
+      const expectedPassword = found.password || (found.role === 'ADMIN' ? 'admin@123' : 'Sales@123');
       if (found.password && credentials.password !== expectedPassword) {
         throw new Error('Incorrect password. Please verify your credentials.');
       }

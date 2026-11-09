@@ -22,12 +22,20 @@ Object.defineProperty(globalThis, 'localStorage', {
   value: mockLocalStorage,
 });
 
-test('PWA Standalone: Admin and Staff can both log in offline', async () => {
+test('PWA Standalone: Admin logs in with credentials and creates staff', async () => {
   mockLocalStorage.clear();
 
-  const adminAuth = await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  const adminAuth = await api.login({ username: 'admin', password: 'admin@123' });
   assert.equal(adminAuth.user.role, 'ADMIN');
   assert.equal(adminAuth.user.username, 'admin');
+
+  // Admin creates first staff
+  const staff = await localDb.createSalesperson({
+    name: 'Rajesh Mohapatra',
+    username: 'sp_rajesh',
+    phone: '9861011223',
+    password: 'Sales@123Rajesh',
+  });
 
   const staffAuth = await api.login({ username: 'sp_rajesh', password: 'Sales@123Rajesh' });
   assert.equal(staffAuth.user.role, 'SALESPERSON');
@@ -35,7 +43,7 @@ test('PWA Standalone: Admin and Staff can both log in offline', async () => {
 });
 
 test('PWA Standalone: Retrieves pre-seeded retailers and calculates totals', async () => {
-  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  await api.login({ username: 'admin', password: 'admin@123' });
   const res = await api.getShops({ page: 1, limit: 10 });
   assert.ok(res.data.length >= 6, 'Pre-seeded shops should exist');
   assert.ok(res.total >= 6);
@@ -94,12 +102,11 @@ test('PWA Standalone: Repeat order and payment collection updates BAKI correctly
 });
 
 test('PWA Standalone: Dashboard aggregates metrics from local database', async () => {
-  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  await api.login({ username: 'admin', password: 'admin@123' });
   const d = await api.getDashboard();
   assert.ok(d.totalShops >= 6);
   assert.ok(d.totalSales > 0);
   assert.ok(d.totalCollected > 0);
-  assert.ok(d.salespersonsLeaderboard.length >= 3);
 });
 
 test('PWA Standalone: CSV report generation exports valid data', async () => {
@@ -110,7 +117,7 @@ test('PWA Standalone: CSV report generation exports valid data', async () => {
 
 test('PWA Standalone: Admin can customize and update bill name, logo, and GSTIN properly', async () => {
   // Ensure admin is logged in
-  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  await api.login({ username: 'admin', password: 'admin@123' });
 
   const initial = await api.getBillingSettings();
   assert.equal(initial.businessName, 'Amantos Global Industries');
@@ -156,7 +163,7 @@ test('PWA Standalone: Retailer onboarding date and billing creation date include
 
 test('PWA Standalone: Admin creates a new staff member and the new staff can log in with their password', async () => {
   // Sign in as Admin
-  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  await api.login({ username: 'admin', password: 'admin@123' });
 
   // Onboard new salesperson with custom credentials
   const newRep = await localDb.createSalesperson({
@@ -180,7 +187,7 @@ test('PWA Standalone: Admin creates a new staff member and the new staff can log
   assert.equal(loginRes.user.role, 'SALESPERSON');
 
   // Admin resets password
-  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  await api.login({ username: 'admin', password: 'admin@123' });
   await localDb.resetPassword(newRep.id, 'NewPass@2026');
 
   // New staff logs in with reset password
@@ -191,7 +198,7 @@ test('PWA Standalone: Admin creates a new staff member and the new staff can log
 
 test('PWA Standalone: Admin can delete staff and delete business retailer', async () => {
   // Sign in as Admin
-  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  await api.login({ username: 'admin', password: 'admin@123' });
 
   // 1. Create a staff and then delete it
   const tempStaff = await localDb.createSalesperson({
@@ -223,7 +230,7 @@ test('PWA Standalone: Admin can delete staff and delete business retailer', asyn
 });
 
 test('PWA Standalone: Admin can export all retailer data in Excel format', async () => {
-  await api.login({ username: 'admin', password: 'AdminPassword@123' });
+  await api.login({ username: 'admin', password: 'admin@123' });
   const excelXml = await api.exportRetailersExcel();
   assert.match(excelXml, /urn:schemas-microsoft-com:office:spreadsheet/);
   assert.match(excelXml, /Retailer Master Directory/);

@@ -14,7 +14,38 @@ Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: s
 
 beforeEach(async () => {
   memory.clear();
-  await localDb.login({ username: 'admin', password: 'AdminPassword@123' });
+  await localDb.login({ username: 'admin', password: 'admin@123' });
+  // Set up test salesperson accounts dynamically with known IDs
+  const users = [
+    {
+      id: 'user_admin',
+      username: 'admin',
+      name: 'System Administrator',
+      role: 'ADMIN',
+      phone: '+91 99999 00000',
+      password: 'admin@123',
+      active: true,
+    },
+    {
+      id: 'user_rajesh',
+      username: 'sp_rajesh',
+      name: 'Rajesh Mohapatra',
+      role: 'SALESPERSON',
+      phone: '+91 98610 11223',
+      password: 'Sales@123Rajesh',
+      active: true,
+    },
+    {
+      id: 'user_amit',
+      username: 'sp_amit',
+      name: 'Amit Kumar Rout',
+      role: 'SALESPERSON',
+      phone: '+91 94370 22334',
+      password: 'Sales@123Amit',
+      active: true,
+    },
+  ];
+  storage.setItem('heylane_pwa_users', JSON.stringify(users));
 });
 
 test('admin and staff have different home panels and cannot enter each other panel', () => {

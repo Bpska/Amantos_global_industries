@@ -16,9 +16,9 @@ export const LoginPage: React.FC = () => {
   const { login, user, token, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  const handleDemoFill = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
+  const handleAdminFill = () => {
+    setUsername('admin');
+    setPassword('admin@123');
     setError('');
   };
 
@@ -76,7 +76,7 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Instant 1-Tap Demo Logins */}
+        {/* Administrator Quick Sign In Shortcut */}
         <div
           style={{
             backgroundColor: 'var(--surface)',
@@ -97,34 +97,25 @@ export const LoginPage: React.FC = () => {
               marginBottom: '8px',
             }}
           >
-            Instant 1-Tap Demo Logins
+            System Administrator Access
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => handleDemoFill('sp_rajesh', 'Sales@123Rajesh')}
-              className="demo-shortcut-btn"
-              style={{ flex: 1, padding: '8px', textAlign: 'center' }}
-            >
-              <div>Staff Rep: Rajesh</div>
-              <div style={{ fontSize: '10px', opacity: 0.8, fontWeight: 500 }}>sp_rajesh</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleDemoFill('admin', 'AdminPassword@123')}
-              className="demo-shortcut-btn"
-              style={{
-                flex: 1,
-                padding: '8px',
-                textAlign: 'center',
-                backgroundColor: '#FAFDFB',
-              }}
-            >
-              <div>Administrator</div>
-              <div style={{ fontSize: '10px', opacity: 0.8, fontWeight: 500 }}>admin</div>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleAdminFill}
+            className="demo-shortcut-btn"
+            style={{
+              width: '100%',
+              padding: '10px',
+              textAlign: 'center',
+              backgroundColor: '#FAFDFB',
+              border: '1px solid #BBF7D0',
+            }}
+          >
+            <div style={{ fontWeight: 800, color: '#007F5F' }}>Fill Administrator Credentials</div>
+            <div style={{ fontSize: '11px', opacity: 0.85, fontWeight: 600, color: '#334155', marginTop: '2px' }}>
+              Username: <strong>admin</strong> · Password: <strong>admin@123</strong>
+            </div>
+          </button>
         </div>
 
         {error && (
@@ -145,7 +136,7 @@ export const LoginPage: React.FC = () => {
                 className="heylane-input"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username (e.g. sp_rajesh or admin)"
+                placeholder="Enter username (e.g. admin or staff handle)"
                 required
                 autoComplete="username"
               />
