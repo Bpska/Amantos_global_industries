@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -11,6 +11,7 @@ import { SalespersonsPage } from './pages/SalespersonsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { InvoicesPage } from './pages/InvoicesPage';
+import { PublicInvoicePage } from './pages/PublicInvoicePage';
 import { canAccessPanel, panelHome } from './services/access';
 import type { Role } from './types';
 
@@ -46,6 +47,8 @@ export function App() {
       <BrowserRouter basename={base}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/invoice/:id" element={<PublicInvoicePage />} />
+          <Route path="/bill/:id" element={<PublicInvoicePage />} />
           <Route path="/admin" element={
             <ProtectedRoute role="ADMIN"><AdminLayout /></ProtectedRoute>
           }>

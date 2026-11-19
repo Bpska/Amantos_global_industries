@@ -22,7 +22,7 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatDayAndDate, formatFullDayDate } from '../utils/dateUtils';
 import { sendInvoicePdfToWhatsApp } from '../utils/generateInvoiceDirectPdf';
-import type { BillingSetting, Shop, User as UserType } from '../types';
+import type { BillingSetting, Product, Shop, User as UserType } from '../types';
 
 export const ShopsPage: React.FC = () => {
   const { user } = useAuth();
@@ -35,6 +35,7 @@ export const ShopsPage: React.FC = () => {
 
   const [shops, setShops] = useState<Shop[]>([]);
   const [salespersons, setSalespersons] = useState<UserType[]>([]);
+  const [productsList, setProductsList] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -51,7 +52,7 @@ export const ShopsPage: React.FC = () => {
   // Modal actions
   const [actionModal, setActionModal] = useState<'order' | 'pay' | null>(null);
   const [orderProduct, setOrderProduct] = useState('Mixture Pack 500g');
-  const [orderQty, setOrderQty] = useState('50');
+  const [orderQty] = useState('50');
   const [orderPrice, setOrderPrice] = useState('10');
   const [orderNotes, setOrderNotes] = useState('');
   const [payAmount, setPayAmount] = useState('');
@@ -66,9 +67,25 @@ export const ShopsPage: React.FC = () => {
   const [fetchingGps, setFetchingGps] = useState(false);
   const [newRepId, setNewRepId] = useState('');
   const [newProduct, setNewProduct] = useState('Mixture Pack 500g');
-  const [newQty, setNewQty] = useState('100');
+  const [newQty] = useState('100');
   const [newPrice, setNewPrice] = useState('120');
   const [newPaid, setNewPaid] = useState('0');
+  const [newPaymentMode, setNewPaymentMode] = useState<'CASH' | 'UPI' | 'BAKI'>('CASH');
+
+  // Multi-item order support for Onboarding
+  interface OrderItemRow {
+    product: string;
+    quantity: number;
+    unitPrice: number;
+  }
+  const [onboardItems, setOnboardItems] = useState<OrderItemRow[]>([
+    { product: 'Mixture Pack 500g', quantity: 100, unitPrice: 120 },
+  ]);
+
+  // Multi-item order support for Repeat Order Modal
+  const [repeatItems, setRepeatItems] = useState<OrderItemRow[]>([
+    { product: 'Mixture Pack 500g', quantity: 50, unitPrice: 10 },
+  ]);
 
   // GPS auto-fetch location
   const handleAutoFetchLocation = () => {
@@ -123,6 +140,31 @@ export const ShopsPage: React.FC = () => {
       alert('Store name, proprietor name, and contact mobile are required.');
       return;
     }
+
+    // Calculate aggregated items or single item
+    const validItems = onboardItems.filter((it) => it.product && it.quantity > 0 && it.unitPrice > 0);
+    const combinedProduct = validItems.length > 0
+      ? validItems.map((it) => `${it.product} (${it.quantity}x₹${it.unitPrice})`).join(' + ')
+      : newProduct;
+    const totalOrderAmount = validItems.length > 0
+      ? validItems.reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0)
+      : (Number(newQty) * Number(newPrice));
+    const totalQuantity = validItems.length > 0
+      ? validItems.reduce((sum, it) => sum + it.quantity, 0)
+      : Number(newQty);
+    const effectiveUnitPrice = totalQuantity > 0 ? (totalOrderAmount / totalQuantity) : Number(newPrice);
+
+    // Payment mode calculation:
+    // CASH or UPI: full amount paid immediately
+    // BAKI: 0 paid initially, or partial
+    let effectivePaid = 0;
+    if (newPaymentMode === 'CASH' || newPaymentMode === 'UPI') {
+      effectivePaid = newPaid !== '' && Number(newPaid) > 0 ? Number(newPaid) : totalOrderAmount;
+    } else {
+      // BAKI mode
+      effectivePaid = Number(newPaid || 0);
+    }
+
     try {
       setActionLoading(true);
       await api.createShop({
@@ -131,16 +173,18 @@ export const ShopsPage: React.FC = () => {
         contactNumber: newContact,
         location: newLocation || 'Bhubaneswar, Odisha',
         salespersonId: isStaff ? user.id : newRepId || undefined,
-        openingOrderProduct: newProduct,
-        openingOrderQuantity: Number(newQty),
-        openingOrderPrice: Number(newPrice),
-        initialPaidAmount: Number(newPaid),
+        openingOrderProduct: combinedProduct,
+        openingOrderQuantity: totalQuantity,
+        openingOrderPrice: Number(effectiveUnitPrice.toFixed(2)),
+        initialPaidAmount: Number(effectivePaid.toFixed(2)),
       });
       setCreateModalOpen(false);
       setNewShopName('');
       setNewOwnerName('');
       setNewContact('');
       setNewLocation('');
+      setNewPaymentMode('CASH');
+      setOnboardItems([{ product: productsList[0]?.name || 'Mixture Pack 500g', quantity: 100, unitPrice: Number(productsList[0]?.unitPrice || 120) }]);
       await fetchShops();
     } catch (err: any) {
       alert(err.message || 'Failed to onboard retailer');
@@ -200,8 +244,27 @@ export const ShopsPage: React.FC = () => {
     }
   };
 
+  const fetchCatalogProducts = async () => {
+    try {
+      const items = await api.getProducts();
+      if (Array.isArray(items) && items.length > 0) {
+        setProductsList(items);
+        const first = items[0];
+        setOrderProduct(first.name);
+        setOrderPrice(String(first.unitPrice || 10));
+        setNewProduct(first.name);
+        setNewPrice(String(first.unitPrice || 120));
+        setOnboardItems([{ product: first.name, quantity: 100, unitPrice: Number(first.unitPrice || 120) }]);
+        setRepeatItems([{ product: first.name, quantity: 50, unitPrice: Number(first.unitPrice || 10) }]);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch products for dropdown:', e);
+    }
+  };
+
   useEffect(() => {
     fetchSalespersons();
+    fetchCatalogProducts();
     api.getBillingSettings().then(setBillingSettings).catch(() => {});
   }, []);
 
@@ -261,18 +324,32 @@ export const ShopsPage: React.FC = () => {
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedShop) return;
+
+    const validItems = repeatItems.filter((it) => it.product && it.quantity > 0 && it.unitPrice > 0);
+    const combinedProduct = validItems.length > 0
+      ? validItems.map((it) => `${it.product} (${it.quantity}x₹${it.unitPrice})`).join(' + ')
+      : orderProduct;
+    const totalOrderAmount = validItems.length > 0
+      ? validItems.reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0)
+      : (Number(orderQty) * Number(orderPrice));
+    const totalQuantity = validItems.length > 0
+      ? validItems.reduce((sum, it) => sum + it.quantity, 0)
+      : Number(orderQty);
+    const effectiveUnitPrice = totalQuantity > 0 ? (totalOrderAmount / totalQuantity) : Number(orderPrice);
+
     try {
       setActionLoading(true);
       await api.addOrder(selectedShop.id, {
-        product: orderProduct,
-        quantity: Number(orderQty),
-        unitPrice: Number(orderPrice),
+        product: combinedProduct,
+        quantity: totalQuantity,
+        unitPrice: Number(effectiveUnitPrice.toFixed(2)),
         notes: orderNotes.trim() || undefined,
       });
       setActionModal(null);
       // Reload details and list
       await openShopDetails(selectedShop.id);
       fetchShops();
+      setRepeatItems([{ product: productsList[0]?.name || 'Mixture Pack 500g', quantity: 50, unitPrice: Number(productsList[0]?.unitPrice || 10) }]);
       alert('Order created and credited to shop ledger.');
     } catch (e: any) {
       alert(e.response?.data?.message || 'Failed to create order');
@@ -1004,6 +1081,35 @@ export const ShopsPage: React.FC = () => {
                                 <span>WhatsApp PDF</span>
                               </button>
                             )}
+
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const invNo = o.invoiceNumber || o.id.slice(0, 6);
+                                  if (!window.confirm(`Permanently delete order/bill "${invNo}"?`)) return;
+                                  try {
+                                    await api.deleteOrder(o.id);
+                                    await openShopDetails(selectedShop.id);
+                                    await fetchShops();
+                                    alert('Order / Bill deleted successfully.');
+                                  } catch (e: any) {
+                                    alert(e.message || 'Failed to delete order');
+                                  }
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#DC2626',
+                                  cursor: 'pointer',
+                                  padding: '4px',
+                                  marginLeft: '6px',
+                                }}
+                                title="Delete Bill"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -1032,56 +1138,169 @@ export const ShopsPage: React.FC = () => {
             {actionModal === 'order' ? (
               <form onSubmit={handleCreateOrder}>
                 <div className="modal-body">
-                  <div className="form-group">
-                    <label className="form-label">Product / SKU Description</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={orderProduct}
-                      onChange={(e) => setOrderProduct(e.target.value)}
-                      required
-                    />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Select Products / Inventory Items</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const first = productsList[0];
+                        setRepeatItems((prev) => [
+                          ...prev,
+                          {
+                            product: first?.name || 'Mixture Pack 500g',
+                            quantity: 10,
+                            unitPrice: Number(first?.unitPrice || 10),
+                          },
+                        ]);
+                      }}
+                      className="btn btn-outline"
+                      style={{ padding: '3px 8px', fontSize: '11px', gap: '4px', color: '#007F5F', borderColor: '#BBF7D0' }}
+                    >
+                      <PlusCircle size={12} />
+                      <span>+ Add More Product</span>
+                    </button>
                   </div>
 
-                  <div className="form-grid-2">
-                    <div className="form-group">
-                      <label className="form-label">Quantity</label>
-                      <input
-                        type="number"
-                        className="form-input"
-                        value={orderQty}
-                        onChange={(e) => setOrderQty(e.target.value)}
-                        required
-                        min="1"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Unit Price (₹ — number or fraction)</label>
-                      <input
-                        type="number"
-                        className="form-input"
-                        value={orderPrice}
-                        onChange={(e) => setOrderPrice(e.target.value)}
-                        required
-                        min="0.01"
-                        step="any"
-                        placeholder="e.g. 12.50"
-                      />
-                    </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+                    {repeatItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '10px',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: '8px',
+                          backgroundColor: '#F8FAFC',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '3px' }}>
+                              Product #{idx + 1}
+                            </label>
+                            <select
+                              className="form-input"
+                              style={{ height: '38px', fontSize: '13px', fontWeight: 600 }}
+                              value={item.product}
+                              onChange={(e) => {
+                                const selectedName = e.target.value;
+                                const matched = productsList.find((p) => p.name === selectedName);
+                                setRepeatItems((prev) =>
+                                  prev.map((it, i) =>
+                                    i === idx
+                                      ? {
+                                          ...it,
+                                          product: selectedName,
+                                          unitPrice: matched?.unitPrice ? Number(matched.unitPrice) : it.unitPrice,
+                                        }
+                                      : it
+                                  )
+                                );
+                              }}
+                            >
+                              {productsList.length > 0 ? (
+                                productsList.map((p) => (
+                                  <option key={p.id} value={p.name}>
+                                    {p.name} {p.unitPrice ? `(₹${p.unitPrice})` : ''}
+                                  </option>
+                                ))
+                              ) : (
+                                <>
+                                  <option value="Mixture Pack 500g">Mixture Pack 500g</option>
+                                  <option value="Besan Laddu 250g">Besan Laddu 250g</option>
+                                  <option value="Salted Cashew 200g">Salted Cashew 200g</option>
+                                  <option value="Spicy Sev 400g">Spicy Sev 400g</option>
+                                  <option value="Gulab Jamun Tin 1kg">Gulab Jamun Tin 1kg</option>
+                                  <option value="Masala Murmura 300g">Masala Murmura 300g</option>
+                                </>
+                              )}
+                            </select>
+                          </div>
+                          {repeatItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setRepeatItems((prev) => prev.filter((_, i) => i !== idx))}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#DC2626',
+                                cursor: 'pointer',
+                                padding: '6px',
+                                marginTop: '16px',
+                              }}
+                              title="Remove item"
+                            >
+                              <X size={16} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="form-grid-2">
+                          <div>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '3px' }}>
+                              Quantity (Units)
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ height: '36px' }}
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                setRepeatItems((prev) =>
+                                  prev.map((it, i) => (i === idx ? { ...it, quantity: val } : it))
+                                );
+                              }}
+                              min="1"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '3px' }}>
+                              Rate (₹)
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ height: '36px' }}
+                              value={item.unitPrice}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setRepeatItems((prev) =>
+                                  prev.map((it, i) => (i === idx ? { ...it, unitPrice: val } : it))
+                                );
+                              }}
+                              min="0"
+                              step="any"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: 'right', fontSize: '12px', fontWeight: 700, color: '#007F5F' }}>
+                          Subtotal: {formatMoney(item.quantity * item.unitPrice)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   <div style={{
-                    padding: '12px',
-                    backgroundColor: '#F8FAFC',
+                    padding: '12px 14px',
+                    backgroundColor: '#F0FDF4',
                     borderRadius: '8px',
                     display: 'flex',
                     justifyContent: 'space-between',
+                    alignItems: 'center',
                     marginBottom: '14px',
-                    border: '1px solid #E2E8F0',
+                    border: '1px solid #BBF7D0',
                   }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748B' }}>Calculated Total:</span>
-                    <span style={{ fontSize: '15px', fontWeight: 800, color: '#007F5F' }}>
-                      {formatMoney(Number(orderQty || 0) * Number(orderPrice || 0))}
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#166534' }}>
+                      Total ({repeatItems.reduce((s, it) => s + it.quantity, 0)} items):
+                    </span>
+                    <span style={{ fontSize: '16px', fontWeight: 900, color: '#007F5F' }}>
+                      {formatMoney(repeatItems.reduce((s, it) => s + (it.quantity * it.unitPrice), 0))}
                     </span>
                   </div>
 
@@ -1092,7 +1311,7 @@ export const ShopsPage: React.FC = () => {
                       className="form-input"
                       value={orderNotes}
                       onChange={(e) => setOrderNotes(e.target.value)}
-                      placeholder="e.g. Dispatched via morning delivery van"
+                      placeholder="e.g. Dispatched via route van"
                     />
                   </div>
                 </div>
@@ -1268,53 +1487,281 @@ export const ShopsPage: React.FC = () => {
                   borderRadius: '10px',
                   border: '1px solid var(--border)',
                 }}>
-                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#007F5F', marginBottom: '10px' }}>
-                    INITIAL STOCK ALLOCATION (OPTIONAL)
-                  </div>
-                  <div className="form-group" style={{ marginBottom: '10px' }}>
-                    <label className="form-label">Product Item</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={newProduct}
-                      onChange={(e) => setNewProduct(e.target.value)}
-                      placeholder="e.g. Mixture Pack 500g"
-                    />
-                  </div>
-                  <div className="form-grid-3">
-                    <div>
-                      <label className="form-label">Units</label>
-                      <input
-                        type="number"
-                        className="form-input"
-                        value={newQty}
-                        onChange={(e) => setNewQty(e.target.value)}
-                        min="1"
-                      />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#007F5F' }}>
+                      INITIAL STOCK ALLOCATION & PRODUCTS
                     </div>
-                    <div>
-                      <label className="form-label">Unit Rate (₹)</label>
-                      <input
-                        type="number"
-                        className="form-input"
-                        value={newPrice}
-                        onChange={(e) => setNewPrice(e.target.value)}
-                        min="0"
-                        step="any"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Paid Now (₹)</label>
-                      <input
-                        type="number"
-                        className="form-input"
-                        value={newPaid}
-                        onChange={(e) => setNewPaid(e.target.value)}
-                        min="0"
-                        step="any"
-                      />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const first = productsList[0];
+                        setOnboardItems((prev) => [
+                          ...prev,
+                          {
+                            product: first?.name || 'Mixture Pack 500g',
+                            quantity: 10,
+                            unitPrice: Number(first?.unitPrice || 10),
+                          },
+                        ]);
+                      }}
+                      className="btn btn-outline"
+                      style={{ padding: '3px 8px', fontSize: '11px', gap: '4px', color: '#007F5F', borderColor: '#BBF7D0' }}
+                    >
+                      <PlusCircle size={12} />
+                      <span>+ Add Product</span>
+                    </button>
+                  </div>
+
+                  {/* Multi-Product List */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+                    {onboardItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '10px',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: '8px',
+                          backgroundColor: '#FFFFFF',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '3px' }}>
+                              Product Item #{idx + 1}
+                            </label>
+                            <select
+                              className="form-input"
+                              style={{ height: '38px', fontSize: '13px', fontWeight: 600 }}
+                              value={item.product}
+                              onChange={(e) => {
+                                const selectedName = e.target.value;
+                                const matched = productsList.find((p) => p.name === selectedName);
+                                setOnboardItems((prev) =>
+                                  prev.map((it, i) =>
+                                    i === idx
+                                      ? {
+                                          ...it,
+                                          product: selectedName,
+                                          unitPrice: matched?.unitPrice ? Number(matched.unitPrice) : it.unitPrice,
+                                        }
+                                      : it
+                                  )
+                                );
+                              }}
+                            >
+                              {productsList.length > 0 ? (
+                                productsList.map((p) => (
+                                  <option key={p.id} value={p.name}>
+                                    {p.name} {p.unitPrice ? `(₹${p.unitPrice})` : ''}
+                                  </option>
+                                ))
+                              ) : (
+                                <>
+                                  <option value="Mixture Pack 500g">Mixture Pack 500g</option>
+                                  <option value="Besan Laddu 250g">Besan Laddu 250g</option>
+                                  <option value="Salted Cashew 200g">Salted Cashew 200g</option>
+                                  <option value="Spicy Sev 400g">Spicy Sev 400g</option>
+                                  <option value="Gulab Jamun Tin 1kg">Gulab Jamun Tin 1kg</option>
+                                  <option value="Masala Murmura 300g">Masala Murmura 300g</option>
+                                </>
+                              )}
+                            </select>
+                          </div>
+                          {onboardItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setOnboardItems((prev) => prev.filter((_, i) => i !== idx))}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#DC2626',
+                                cursor: 'pointer',
+                                padding: '6px',
+                                marginTop: '16px',
+                              }}
+                              title="Remove item"
+                            >
+                              <X size={16} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="form-grid-2">
+                          <div>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '3px' }}>
+                              Units
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ height: '36px' }}
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                setOnboardItems((prev) =>
+                                  prev.map((it, i) => (i === idx ? { ...it, quantity: val } : it))
+                                );
+                              }}
+                              min="1"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '3px' }}>
+                              Rate (₹)
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ height: '36px' }}
+                              value={item.unitPrice}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setOnboardItems((prev) =>
+                                  prev.map((it, i) => (i === idx ? { ...it, unitPrice: val } : it))
+                                );
+                              }}
+                              min="0"
+                              step="any"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: 'right', fontSize: '12px', fontWeight: 700, color: '#007F5F' }}>
+                          Subtotal: {formatMoney(item.quantity * item.unitPrice)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Payment Mode Selection: CASH, UPI, BAKI */}
+                  <div style={{ marginTop: '14px', marginBottom: '14px' }}>
+                    <label className="form-label" style={{ fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
+                      Payment Option / Mode *
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewPaymentMode('CASH');
+                          const tot = onboardItems.reduce((s, it) => s + (it.quantity * it.unitPrice), 0);
+                          setNewPaid(String(tot));
+                        }}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: '8px',
+                          border: newPaymentMode === 'CASH' ? '2px solid #007F5F' : '1px solid #CBD5E1',
+                          backgroundColor: newPaymentMode === 'CASH' ? '#F0FDF4' : '#FFFFFF',
+                          color: newPaymentMode === 'CASH' ? '#007F5F' : '#475569',
+                          fontWeight: 800,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '2px',
+                        }}
+                      >
+                        <span>💵 CASH</span>
+                        <span style={{ fontSize: '10px', fontWeight: 600, color: '#166534' }}>Full Cash Paid</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewPaymentMode('UPI');
+                          const tot = onboardItems.reduce((s, it) => s + (it.quantity * it.unitPrice), 0);
+                          setNewPaid(String(tot));
+                        }}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: '8px',
+                          border: newPaymentMode === 'UPI' ? '2px solid #2563EB' : '1px solid #CBD5E1',
+                          backgroundColor: newPaymentMode === 'UPI' ? '#EFF6FF' : '#FFFFFF',
+                          color: newPaymentMode === 'UPI' ? '#2563EB' : '#475569',
+                          fontWeight: 800,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '2px',
+                        }}
+                      >
+                        <span>📱 UPI</span>
+                        <span style={{ fontSize: '10px', fontWeight: 600, color: '#1D4ED8' }}>Digital Paid</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewPaymentMode('BAKI');
+                          setNewPaid('0');
+                        }}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: '8px',
+                          border: newPaymentMode === 'BAKI' ? '2px solid #DC2626' : '1px solid #CBD5E1',
+                          backgroundColor: newPaymentMode === 'BAKI' ? '#FEF2F2' : '#FFFFFF',
+                          color: newPaymentMode === 'BAKI' ? '#DC2626' : '#475569',
+                          fontWeight: 800,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '2px',
+                        }}
+                      >
+                        <span>🔴 BAKI</span>
+                        <span style={{ fontSize: '10px', fontWeight: 600, color: '#B91C1C' }}>Credit Due</span>
+                      </button>
                     </div>
                   </div>
+
+                  {/* Financial calculation breakdown */}
+                  {(() => {
+                    const totalAmt = onboardItems.reduce((s, it) => s + (it.quantity * it.unitPrice), 0);
+                    const paidAmt = Number(newPaid || 0);
+                    const bakiAmt = Math.max(0, totalAmt - paidAmt);
+                    return (
+                      <div style={{
+                        padding: '12px 14px',
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: '8px',
+                        border: '1px solid #E2E8F0',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Total Billed:</span>
+                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>{formatMoney(totalAmt)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Amount Paid Now (₹):</span>
+                          <input
+                            type="number"
+                            className="form-input"
+                            style={{ height: '32px', width: '120px', textAlign: 'right', fontWeight: 700 }}
+                            value={newPaid}
+                            onChange={(e) => setNewPaid(e.target.value)}
+                            min="0"
+                            step="any"
+                          />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #CBD5E1', paddingTop: '6px' }}>
+                          <span style={{ fontSize: '12px', color: bakiAmt > 0 ? '#DC2626' : '#166534', fontWeight: 800 }}>
+                            {bakiAmt > 0 ? 'Outstanding BAKI:' : 'Status:'}
+                          </span>
+                          <span style={{ fontSize: '14px', fontWeight: 900, color: bakiAmt > 0 ? '#DC2626' : '#166534' }}>
+                            {bakiAmt > 0 ? formatMoney(bakiAmt) : 'FULL SETTLED'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 

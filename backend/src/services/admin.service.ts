@@ -1037,12 +1037,12 @@ export class AdminService {
       settings = await prisma.billingSetting.create({
         data: {
           id: 'default',
-          businessName: 'AGI',
-          tagline: 'Wholesale & Retail Replenishment Network',
+          businessName: 'Amanta Global Industries',
+          tagline: 'Industrial & Commercial Distribution Network',
           phone: '+91 98765 43210',
-          address: 'Main Commercial Hub',
+          address: 'Main Commercial Hub, Bhubaneswar, Odisha',
           terms: 'Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.',
-          logoUrl: '/assets/agi-logo.jpg',
+          logoUrl: '/assets/brand/amantos-logo.jpg',
         },
       });
     }
@@ -1061,12 +1061,12 @@ export class AdminService {
       where: { id: 'default' },
       create: {
         id: 'default',
-        businessName: data.businessName || 'AGI',
+        businessName: data.businessName || 'Amanta Global Industries',
         tagline: data.tagline,
         phone: data.phone,
         address: data.address,
         terms: data.terms,
-        logoUrl: data.logoUrl || '/assets/agi-logo.jpg',
+        logoUrl: data.logoUrl || '/assets/brand/amantos-logo.jpg',
       },
       update: {
         ...(data.businessName !== undefined ? { businessName: data.businessName } : {}),

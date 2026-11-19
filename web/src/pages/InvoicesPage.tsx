@@ -13,12 +13,14 @@ import {
   Upload,
   RotateCcw,
   FileDown,
+  Trash2,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { exportInvoiceToPdf } from '../utils/generateInvoicePdf';
 import { sendInvoicePdfToWhatsApp } from '../utils/generateInvoiceDirectPdf';
 import { formatDayAndDate, formatFullDayDate } from '../utils/dateUtils';
+import { parseBillProductItems } from '../utils/parseBillItems';
 import type { BillingSetting, Order } from '../types';
 
 const PRESET_LOGOS = [
@@ -212,7 +214,9 @@ export const InvoicesPage: React.FC = () => {
     const location = order.shop?.location || 'Store Address';
     const dateStr = formatFullDayDate(order.date);
     const repName = order.salesperson?.name || 'Sales Representative';
-    const businessTitle = (billingSettings.businessName || 'Amantos Global Industries').toUpperCase();
+    const businessTitle = (billingSettings.businessName || 'Amanta Global Industries').toUpperCase();
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://industri.heylane.in';
+    const invoiceLink = `${origin}/invoice/${order.id}`;
 
     const text = 
 `🧾 *${businessTitle}*
@@ -235,7 +239,9 @@ export const InvoicesPage: React.FC = () => {
 • Balance Due (BAKI): *₹${Number(order.baki || 0).toFixed(2)}*
 • Status: *${order.baki === 0 ? '✅ FULLY PAID' : (order.paidAmount > 0 ? '⚠️ PARTIAL' : '🔴 UNPAID / DUE')}*
 ━━━━━━━━━━━━━━━━━━━━
-📄 *Official PDF Invoice Generated & Attached*
+🔗 *View & Download Full Bill Online:*
+👉 ${invoiceLink}
+
 👨‍💼 *Logged By:* ${repName}
 🙏 Thank you for your business! Reach out to ${billingSettings.phone || 'us'} for queries.`;
 
@@ -303,6 +309,24 @@ export const InvoicesPage: React.FC = () => {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDeleteInvoice = async (order: Order) => {
+    if (!isAdmin) return;
+    const invNo = getInvoiceNumber(order);
+    if (!window.confirm(`Are you sure you want to permanently delete bill "${invNo}" for store "${order.shop?.name || 'Retailer'}"? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      await api.deleteOrder(order.id);
+      if (activeInvoice?.id === order.id) {
+        setActiveInvoice(null);
+      }
+      await fetchInvoices();
+      alert(`Invoice ${invNo} deleted successfully.`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete bill');
+    }
   };
 
   const filteredOrders = orders.filter((o) => {
@@ -710,6 +734,19 @@ export const InvoicesPage: React.FC = () => {
                               Physical copy
                             </span>
                           ) : null}
+
+                          {/* Delete Bill Action for Admin */}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteInvoice(ord)}
+                              className="btn btn-outline"
+                              style={{ padding: '5px 8px', fontSize: '12px', color: '#DC2626', borderColor: '#FECACA' }}
+                              title="Delete this bill"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -839,6 +876,18 @@ export const InvoicesPage: React.FC = () => {
                       >
                         <Printer size={13} />
                         <span>Print</span>
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteInvoice(ord)}
+                        className="btn btn-outline mobile-card-btn"
+                        style={{ color: '#DC2626', borderColor: '#FECACA' }}
+                        title="Delete this bill"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete</span>
                       </button>
                     )}
                   </div>
@@ -1011,18 +1060,28 @@ export const InvoicesPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-                      <td style={{ padding: '12px', color: '#64748B' }}>1</td>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ fontWeight: 800, color: '#0F172A' }}>{activeInvoice.product}</div>
-                        {activeInvoice.notes && (
-                          <div style={{ fontSize: '11px', color: '#64748B' }}>Note: {activeInvoice.notes}</div>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700 }}>{activeInvoice.quantity}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>{Number(activeInvoice.unitPrice || 0).toFixed(2)}</td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 800 }}>{formatMoney(activeInvoice.totalAmount)}</td>
-                    </tr>
+                    {(() => {
+                      const items = parseBillProductItems(
+                        activeInvoice.product,
+                        activeInvoice.quantity,
+                        Number(activeInvoice.unitPrice || 0),
+                        Number(activeInvoice.totalAmount || 0)
+                      );
+                      return items.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                          <td style={{ padding: '12px', color: '#64748B' }}>{idx + 1}</td>
+                          <td style={{ padding: '12px' }}>
+                            <div style={{ fontWeight: 800, color: '#0F172A' }}>{item.name}</div>
+                            {idx === 0 && activeInvoice.notes && (
+                              <div style={{ fontSize: '11px', color: '#64748B' }}>Note: {activeInvoice.notes}</div>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700 }}>{item.quantity}</td>
+                          <td style={{ padding: '12px', textAlign: 'right' }}>{Number(item.unitPrice || 0).toFixed(2)}</td>
+                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 800 }}>{formatMoney(item.total)}</td>
+                        </tr>
+                      ));
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -1106,6 +1165,19 @@ export const InvoicesPage: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteInvoice(activeInvoice)}
+                    className="btn btn-outline"
+                    style={{ gap: '6px', color: '#DC2626', borderColor: '#FECACA' }}
+                    title="Delete this bill"
+                  >
+                    <Trash2 size={15} />
+                    <span>Delete Bill</span>
+                  </button>
+                )}
+
                 {isAdmin && activeInvoice.billingType !== 'PHYSICAL' ? (
                   <button
                     type="button"

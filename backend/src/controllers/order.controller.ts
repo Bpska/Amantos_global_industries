@@ -20,4 +20,22 @@ export class OrderController {
       next(error);
     }
   }
+
+  static async deleteOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await OrderService.deleteOrder(req.params.id, req.user!);
+      sendSuccess(res, result, 'Order deleted successfully', 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getPublicInvoice(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await OrderService.getPublicInvoice(req.params.id);
+      sendSuccess(res, result, 'Invoice loaded successfully', 200);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

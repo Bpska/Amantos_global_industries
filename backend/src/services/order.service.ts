@@ -231,4 +231,156 @@ export class OrderService {
 
     return result;
   }
+
+  /**
+   * Fetch a single public bill/invoice by order ID or invoice number (no auth required for customer viewing).
+   */
+  static async getPublicInvoice(orderIdOrInv: string) {
+    let order = await prisma.order.findUnique({
+      where: { id: orderIdOrInv },
+      include: {
+        shop: true,
+        salesperson: {
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+            phone: true,
+          },
+        },
+        payments: {
+          orderBy: { paidOn: 'desc' },
+        },
+      },
+    });
+
+    if (!order) {
+      // Try searching by short uuid prefix if user passes partial id
+      const candidates = await prisma.order.findMany({
+        where: {
+          id: { startsWith: orderIdOrInv.toLowerCase() },
+        },
+        include: {
+          shop: true,
+          salesperson: {
+            select: {
+              id: true,
+              fullName: true,
+              username: true,
+              phone: true,
+            },
+          },
+          payments: {
+            orderBy: { paidOn: 'desc' },
+          },
+        },
+        take: 1,
+      });
+      order = candidates[0] || null;
+    }
+
+    if (!order) {
+      throw new NotFoundError('Invoice not found');
+    }
+
+    const ordPaid = Number(order.amountPaid);
+    const ordBaki = Number(order.balanceDue);
+    const ordTotal = Number(order.totalAmount);
+    const ordStatus = ordBaki === 0 ? 'PAID' : (ordPaid > 0 ? 'PARTIAL' : 'UNPAID');
+
+    const billingSettings = await prisma.billingSetting.findUnique({
+      where: { id: 'default' },
+    });
+
+    return {
+      id: order.id,
+      invoiceNumber: `INV-${new Date(order.createdAt).getFullYear()}-${order.id.slice(0, 6).toUpperCase()}`,
+      billingType: order.billingType || 'ONLINE',
+      product: order.productName,
+      productName: order.productName,
+      quantity: order.quantity,
+      unitPrice: Number(order.unitPrice),
+      totalAmount: ordTotal,
+      amountPaid: ordPaid,
+      paidAmount: ordPaid,
+      balanceDue: ordBaki,
+      baki: ordBaki,
+      status: ordStatus,
+      date: order.visitDate.toISOString(),
+      visitDate: order.visitDate.toISOString(),
+      visitDay: order.visitDay,
+      notes: order.notes,
+      createdAt: order.createdAt.toISOString(),
+      shop: {
+        id: order.shop.id,
+        name: order.shop.shopName,
+        shopName: order.shop.shopName,
+        ownerName: order.shop.ownerName,
+        contactNumber: order.shop.contactNumber,
+        location: order.shop.location,
+      },
+      salesperson: order.salesperson
+        ? {
+            id: order.salesperson.id,
+            name: order.salesperson.fullName,
+            username: order.salesperson.username,
+            phone: order.salesperson.phone,
+          }
+        : undefined,
+      payments: order.payments.map((p) => ({
+        id: p.id,
+        amount: Number(p.amount),
+        paidOn: p.paidOn.toISOString(),
+        note: p.note,
+      })),
+      billingSettings: billingSettings || {
+        businessName: 'Amanta Global Industries',
+        tagline: 'Industrial & Commercial Distribution Network',
+        phone: '+91 98765 43210',
+        address: 'Main Commercial Hub, Bhubaneswar, Odisha',
+        terms: 'Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.',
+        logoUrl: '/assets/brand/amantos-logo.jpg',
+      },
+    };
+  }
+
+  /**
+   * Delete an order (bill/dispatch).
+   * Restricted to Admin, or salespeople on their own orders.
+   * Cascade-deletes all associated payments and cleans up ledger.
+   */
+  static async deleteOrder(orderId: string, requestingUser: { id: string; role: Role }) {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        shop: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundError('Order / Bill not found');
+    }
+
+    if (
+      requestingUser.role !== Role.ADMIN &&
+      order.salespersonId !== requestingUser.id &&
+      order.shop.createdById !== requestingUser.id
+    ) {
+      throw new ForbiddenError('You can only delete your own orders');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete associated payments
+      await tx.payment.deleteMany({
+        where: { orderId },
+      });
+
+      // 2. Delete the order itself
+      await tx.order.delete({
+        where: { id: orderId },
+      });
+    });
+
+    return { success: true, message: 'Bill / Order deleted successfully' };
+  }
 }

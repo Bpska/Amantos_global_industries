@@ -105,12 +105,12 @@ model Product {
 
 model BillingSetting {
   id           String   @id @default("default")
-  businessName String   @default("AGI")
-  tagline      String?  @default("Wholesale & Retail Replenishment Network")
+  businessName String   @default("Amanta Global Industries")
+  tagline      String?  @default("Industrial & Commercial Distribution Network")
   phone        String?  @default("+91 98765 43210")
-  address      String?  @default("Main Commercial Hub")
+  address      String?  @default("Main Commercial Hub, Bhubaneswar, Odisha")
   terms        String?  @default("Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.")
-  logoUrl      String?  @default("/assets/agi-logo.jpg")
+  logoUrl      String?  @default("/assets/brand/amantos-logo.jpg")
   updatedAt    DateTime @updatedAt
 
   @@map("billing_settings")

@@ -8,7 +8,10 @@ import { adminOrdersQuerySchema } from '../validations/admin.validation';
 
 const router = Router();
 
-// All order endpoints require authentication
+// Public endpoint: Allow customers/retailers to view their digital bill via link without auth
+router.get('/public/:id', OrderController.getPublicInvoice);
+
+// All other order endpoints require authentication
 router.use(authenticate);
 
 // Staff and Admin can list orders
@@ -27,5 +30,8 @@ router.get(
 // Record payment (collect baki) - supports both /:id/payments and /:id/pay
 router.post('/:id/payments', validate(createPaymentSchema), OrderController.recordPayment);
 router.post('/:id/pay', validate(createPaymentSchema), OrderController.recordPayment);
+
+// Delete order / bill
+router.delete('/:id', OrderController.deleteOrder);
 
 export default router;

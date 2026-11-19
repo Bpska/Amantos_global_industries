@@ -59,7 +59,7 @@ async function main() {
     await prisma.billingSetting.create({
       data: {
         id: 'default',
-        businessName: 'Amantos Global Industries',
+        businessName: 'Amanta Global Industries',
         tagline: 'Industrial & Commercial Distribution Network',
         phone: '+91 98765 43210',
         address: 'Main Commercial Hub, Bhubaneswar, Odisha',

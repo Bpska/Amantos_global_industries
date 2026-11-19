@@ -120,7 +120,7 @@ test('PWA Standalone: Admin can customize and update bill name, logo, and GSTIN 
   await api.login({ username: 'admin', password: 'admin@123' });
 
   const initial = await api.getBillingSettings();
-  assert.equal(initial.businessName, 'Amantos Global Industries');
+  assert.equal(initial.businessName, 'Amanta Global Industries');
   assert.equal(initial.logoUrl, '/assets/brand/amantos-logo.jpg');
 
   // Update billing details with custom name and logo

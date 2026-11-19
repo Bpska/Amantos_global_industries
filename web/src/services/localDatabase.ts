@@ -105,7 +105,7 @@ const INITIAL_PRODUCTS: Product[] = [
 ];
 
 const INITIAL_SETTINGS: BillingSetting = {
-  businessName: 'Amantos Global Industries',
+  businessName: 'Amanta Global Industries',
   tagline: 'Industrial & Commercial Distribution Network',
   phone: '+91 98765 43210',
   address: 'Main Commercial Hub, Bhubaneswar, Odisha',
@@ -857,6 +857,31 @@ export const localDb = {
     return { payment: newPayment, order };
   },
 
+  async deleteOrder(orderId: string): Promise<{ success: boolean; message: string }> {
+    initLocalDatabase();
+    requireAdmin();
+    let orders = getStore<Order[]>(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (!targetOrder) throw new Error('Order not found');
+
+    const shops = getStore<Shop[]>(STORAGE_KEYS.SHOPS, INITIAL_SHOPS);
+    const shop = shops.find((s) => s.id === targetOrder.shopId);
+
+    // Revert amounts from shop ledger
+    if (shop) {
+      shop.totalAmount = Math.max(0, shop.totalAmount - targetOrder.totalAmount);
+      shop.paidAmount = Math.max(0, shop.paidAmount - targetOrder.paidAmount);
+      shop.baki = Math.max(0, shop.totalAmount - shop.paidAmount);
+      shop.orders = (shop.orders || []).filter((o) => o.id !== orderId);
+      setStore(STORAGE_KEYS.SHOPS, shops);
+    }
+
+    orders = orders.filter((o) => o.id !== orderId);
+    setStore(STORAGE_KEYS.ORDERS, orders);
+
+    return { success: true, message: 'Order / Bill removed successfully' };
+  },
+
   // Salespersons
   async getSalespersons(): Promise<User[]> {
     initLocalDatabase();
@@ -1101,7 +1126,7 @@ export const localDb = {
    <Column ss:Width="100"/>
    <Column ss:Width="90"/>
    <Row ss:Height="24">
-    <Cell ss:MergeAcross="10" ss:StyleID="Title"><Data ss:Type="String">Amantos Global Industries — Retailer Master Directory</Data></Cell>
+    <Cell ss:MergeAcross="10" ss:StyleID="Title"><Data ss:Type="String">Amanta Global Industries — Retailer Master Directory</Data></Cell>
    </Row>
    <Row ss:Height="20">
     <Cell ss:StyleID="Header"><Data ss:Type="String">Shop ID</Data></Cell>

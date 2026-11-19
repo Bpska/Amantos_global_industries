@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import type { BillingSetting, Order } from '../types';
 import { formatFullDayDate } from './dateUtils';
+import { parseBillProductItems } from './parseBillItems';
 
 /**
  * Builds a professional PDF file for an order/invoice directly with jsPDF.
@@ -16,7 +17,7 @@ export const createOrderPdfBlob = (
     format: 'a4',
   });
 
-  const businessName = (billingSettings?.businessName || 'Amantos Global Industries').toUpperCase();
+  const businessName = (billingSettings?.businessName || 'Amanta Global Industries').toUpperCase();
   const tagline = billingSettings?.tagline || 'Industrial & Commercial Distribution Network';
   const phone = billingSettings?.phone || '+91 98765 43210';
   const address = billingSettings?.address || 'Main Commercial Hub, Bhubaneswar, Odisha';
@@ -83,21 +84,35 @@ export const createOrderPdfBlob = (
   doc.text('RATE (INR)', 135, 84);
   doc.text('AMOUNT (INR)', 165, 84);
 
-  // Table Body
+  // Table Body: Parse individual items line by line
+  const parsedItems = parseBillProductItems(
+    order.product,
+    order.quantity,
+    Number(order.unitPrice || 0),
+    Number(order.totalAmount || 0)
+  );
+
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(order.product || 'Product Pack', 18, 96);
-  doc.text(`${order.quantity} pcs`, 110, 96);
-  doc.text(`Rs. ${Number(order.unitPrice || 0).toFixed(2)}`, 135, 96);
-  doc.text(`Rs. ${Number(order.totalAmount || 0).toFixed(2)}`, 165, 96);
+  doc.setFontSize(9.5);
+
+  let currentY = 93;
+  parsedItems.forEach((item) => {
+    // Truncate long product names if necessary
+    const truncatedName = item.name.length > 44 ? `${item.name.slice(0, 42)}…` : item.name;
+    doc.text(truncatedName, 18, currentY);
+    doc.text(`${item.quantity} pcs`, 110, currentY);
+    doc.text(`Rs. ${Number(item.unitPrice).toFixed(2)}`, 135, currentY);
+    doc.text(`Rs. ${Number(item.total).toFixed(2)}`, 165, currentY);
+    currentY += 8;
+  });
 
   // Separator
   doc.setDrawColor(226, 232, 240);
-  doc.line(14, 104, 196, 104);
+  doc.line(14, currentY + 2, 196, currentY + 2);
 
   // Totals Box
-  const startY = 112;
+  const startY = currentY + 10;
   doc.setFont('helvetica', 'normal');
   doc.text('Total Invoiced Amount:', 120, startY);
   doc.setFont('helvetica', 'bold');
@@ -120,10 +135,11 @@ export const createOrderPdfBlob = (
   doc.setFontSize(8);
   const termsText = billingSettings?.terms ||
     'Goods once sold are subject to quality warranty. Please clear pending BAKI within 30 days of invoice date.';
-  doc.text(termsText, 14, 150, { maxWidth: 182 });
+  const termsY = Math.max(startY + 28, 145);
+  doc.text(termsText, 14, termsY, { maxWidth: 182 });
 
   doc.setFont('helvetica', 'normal');
-  doc.text('Computer generated digital tax invoice powered by HeyLane.', 14, 162);
+  doc.text('Computer generated digital tax invoice powered by Amanta Global Industries.', 14, termsY + 12);
 
   const cleanInvNo = invNo.replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = `${cleanInvNo}.pdf`;
@@ -143,11 +159,15 @@ export const sendInvoicePdfToWhatsApp = async (
   shop: { name: string; ownerName?: string; contactNumber?: string; location?: string },
   billingSettings?: BillingSetting | null
 ): Promise<void> => {
-  const { blob, file, filename } = createOrderPdfBlob(order, shop, billingSettings);
+  const { blob, filename } = createOrderPdfBlob(order, shop, billingSettings);
   const cleanPhone = (shop.contactNumber || '').replace(/[^0-9]/g, '');
   const phone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-  const brandTitle = (billingSettings?.businessName || 'Amantos Global Industries').toUpperCase();
+  const brandTitle = (billingSettings?.businessName || 'Amanta Global Industries').toUpperCase();
   const invNo = order.invoiceNumber || `INV-${new Date(order.date).getFullYear()}-${order.id.slice(0, 6).toUpperCase()}`;
+
+  // Generate public view / download link for the customer
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://industri.heylane.in';
+  const invoiceLink = `${origin}/invoice/${order.id}`;
 
   const messageText = 
 `🧾 *${brandTitle} - TAX INVOICE*
@@ -159,25 +179,12 @@ export const sendInvoicePdfToWhatsApp = async (
 ✅ *Paid:* ₹${Number(order.paidAmount || 0).toFixed(2)}
 🔴 *BAKI Due:* ₹${Number(order.baki || 0).toFixed(2)}
 ━━━━━━━━━━━━━━━━━━━━
-📎 *Official Invoice PDF file is generated and attached.*`;
+🔗 *View & Download Full Bill Online:*
+👉 ${invoiceLink}
 
-  // 1. If Web Share API with files is supported (Mobile Chrome, Safari, Android, iOS)
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        title: `${brandTitle} Invoice ${invNo}`,
-        text: messageText,
-        files: [file],
-      });
-      return;
-    } catch (e: any) {
-      if (e.name !== 'AbortError') {
-        console.warn('Web Share failed, using download + WhatsApp fallback:', e);
-      }
-    }
-  }
+🙏 Thank you for your business with ${brandTitle}!`;
 
-  // 2. Fallback for Desktop browsers: Auto-download the PDF file directly so user has it ready, then open WhatsApp chat
+  // 1. Auto-download the PDF invoice so the user has the physical PDF ready
   const blobUrl = URL.createObjectURL(blob);
   const downloadLink = document.createElement('a');
   downloadLink.href = blobUrl;
@@ -187,8 +194,14 @@ export const sendInvoicePdfToWhatsApp = async (
   document.body.removeChild(downloadLink);
   setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 
-  // Open WhatsApp chat directly with the customer
-  const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(messageText)}`;
-  window.open(waUrl, '_blank');
+  // 2. Open WhatsApp directly to the customer's chat without showing Windows Share sheet
+  const encodedText = encodeURIComponent(messageText);
+  const waDirectUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
+
+  // Open direct WhatsApp chat conversation with that number
+  const win = window.open(waDirectUrl, '_blank');
+  if (!win || win.closed || typeof win.closed === 'undefined') {
+    window.location.href = waDirectUrl;
+  }
 };
 

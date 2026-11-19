@@ -237,6 +237,14 @@ export const api = {
     return unwrap<{ payment: any; order: Order }>(res);
   },
 
+  async deleteOrder(orderId: string): Promise<{ success: boolean; message?: string }> {
+    if (!isLiveBrowser && apiClient.defaults.adapter === defaultAdapter) {
+      return localDb.deleteOrder(orderId);
+    }
+    const res = await apiClient.delete(`/orders/${orderId}`);
+    return unwrap<{ success: boolean; message?: string }>(res);
+  },
+
   // Sales Representatives / Staff Roster
   async getSalespersons(): Promise<User[]> {
     if (!isLiveBrowser && apiClient.defaults.adapter === defaultAdapter) {
@@ -377,9 +385,16 @@ export const api = {
     if (!isLiveBrowser && apiClient.defaults.adapter === defaultAdapter) {
       return localDb.getProducts();
     }
-    const res = await apiClient.get('/admin/products');
-    const raw = unwrap<any>(res);
-    return Array.isArray(raw) ? raw : (raw?.data || []);
+    // Staff can access /products, Admin can access /admin/products or /products
+    try {
+      const res = await apiClient.get('/products');
+      const raw = unwrap<any>(res);
+      return Array.isArray(raw) ? raw : (raw?.data || []);
+    } catch {
+      const res = await apiClient.get('/admin/products');
+      const raw = unwrap<any>(res);
+      return Array.isArray(raw) ? raw : (raw?.data || []);
+    }
   },
 
   async addProduct(data: { name: string; unitPrice?: number; category?: string }): Promise<Product> {
