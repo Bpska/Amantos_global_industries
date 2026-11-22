@@ -19,7 +19,7 @@ export const createOrderPdfBlob = (
 
   const businessName = (billingSettings?.businessName || 'Amanta Global Industries').toUpperCase();
   const tagline = billingSettings?.tagline || 'Industrial & Commercial Distribution Network';
-  const phone = billingSettings?.phone || '+91 98765 43210';
+  const phone = billingSettings?.phone || '+91 91244 22670';
   const address = billingSettings?.address || 'Main Commercial Hub, Bhubaneswar, Odisha';
   const gstin = billingSettings?.gstin || '';
   const invNo = order.invoiceNumber || `INV-${new Date(order.date).getFullYear()}-${order.id.slice(0, 6).toUpperCase()}`;

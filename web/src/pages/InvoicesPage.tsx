@@ -43,11 +43,11 @@ export const InvoicesPage: React.FC = () => {
   // Selected Order for Invoice Modal
   const [activeInvoice, setActiveInvoice] = useState<Order | null>(null);
 
-  // Billing Settings (Default to Amantos Global Industries)
+  // Billing Settings (Default to Amanta Global Industries)
   const [billingSettings, setBillingSettings] = useState<BillingSetting>({
-    businessName: 'Amantos Global Industries',
+    businessName: 'Amanta Global Industries',
     tagline: 'Industrial & Commercial Distribution Network',
-    phone: '+91 98765 43210',
+    phone: '+91 91244 22670',
     address: 'Main Commercial Hub, Bhubaneswar, Odisha',
     terms: 'Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date. For digital payments, scan the authorized QR code with your sales executive.',
     logoUrl: '/assets/brand/amantos-logo.jpg',
@@ -59,9 +59,9 @@ export const InvoicesPage: React.FC = () => {
 
   // Edit settings form
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [formBusinessName, setFormBusinessName] = useState('Amantos Global Industries');
+  const [formBusinessName, setFormBusinessName] = useState('Amanta Global Industries');
   const [formTagline, setFormTagline] = useState('Industrial & Commercial Distribution Network');
-  const [formPhone, setFormPhone] = useState('+91 98765 43210');
+  const [formPhone, setFormPhone] = useState('+91 91244 22670');
   const [formAddress, setFormAddress] = useState('Main Commercial Hub, Bhubaneswar, Odisha');
   const [formTerms, setFormTerms] = useState('Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.');
   const [formLogoUrl, setFormLogoUrl] = useState('/assets/brand/amantos-logo.jpg');
@@ -88,16 +88,16 @@ export const InvoicesPage: React.FC = () => {
       const s = await api.getBillingSettings();
       if (s) {
         setBillingSettings({
-          businessName: s.businessName || 'Amantos Global Industries',
+          businessName: s.businessName || 'Amanta Global Industries',
           tagline: s.tagline || 'Industrial & Commercial Distribution Network',
-          phone: s.phone || '+91 98765 43210',
+          phone: s.phone || '+91 91244 22670',
           address: s.address || 'Main Commercial Hub, Bhubaneswar, Odisha',
           terms: s.terms || 'Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.',
           logoUrl: s.logoUrl || '/assets/brand/amantos-logo.jpg',
         });
-        setFormBusinessName(s.businessName || 'Amantos Global Industries');
+        setFormBusinessName(s.businessName || 'Amanta Global Industries');
         setFormTagline(s.tagline || 'Industrial & Commercial Distribution Network');
-        setFormPhone(s.phone || '+91 98765 43210');
+        setFormPhone(s.phone || '+91 91244 22670');
         setFormAddress(s.address || 'Main Commercial Hub, Bhubaneswar, Odisha');
         setFormTerms(s.terms || 'Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.');
         setFormLogoUrl(s.logoUrl || '/assets/brand/amantos-logo.jpg');
@@ -1403,7 +1403,7 @@ export const InvoicesPage: React.FC = () => {
                     className="form-input"
                     value={formBusinessName}
                     onChange={(e) => setFormBusinessName(e.target.value)}
-                    placeholder="e.g. HeyLane or Amantos Global Industries"
+                    placeholder="e.g. Amanta Global Industries"
                     required
                   />
                   <span style={{ fontSize: '11px', color: '#64748B', marginTop: '2px', display: 'block' }}>
@@ -1429,7 +1429,7 @@ export const InvoicesPage: React.FC = () => {
                     className="form-input"
                     value={formPhone}
                     onChange={(e) => setFormPhone(e.target.value)}
-                    placeholder="e.g. +91 98765 43210"
+                    placeholder="e.g. +91 91244 22670"
                   />
                 </div>
 

@@ -160,7 +160,7 @@ export const PublicInvoicePage: React.FC = () => {
               {billing?.tagline || 'Industrial & Commercial Distribution Network'}
             </p>
             <p style={{ fontSize: '11px', margin: '4px 0 0', opacity: 0.8 }}>
-              {billing?.address || 'Main Commercial Hub, Bhubaneswar, Odisha'} | Helpline: {billing?.phone || '+91 98765 43210'}
+              {billing?.address || 'Main Commercial Hub, Bhubaneswar, Odisha'} | Helpline: {billing?.phone || '+91 91244 22670'}
             </p>
           </div>
 

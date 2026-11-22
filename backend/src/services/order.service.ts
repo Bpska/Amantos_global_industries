@@ -336,7 +336,7 @@ export class OrderService {
       billingSettings: billingSettings || {
         businessName: 'Amanta Global Industries',
         tagline: 'Industrial & Commercial Distribution Network',
-        phone: '+91 98765 43210',
+        phone: '+91 91244 22670',
         address: 'Main Commercial Hub, Bhubaneswar, Odisha',
         terms: 'Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.',
         logoUrl: '/assets/brand/amantos-logo.jpg',
