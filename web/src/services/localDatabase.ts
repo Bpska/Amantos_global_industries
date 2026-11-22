@@ -398,6 +398,27 @@ export const initLocalDatabase = (): void => {
     localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     localStorage.setItem('retailflow_agi_migrated', 'true');
   } else {
+    // One-time migration for legacy default: update stale 'Amantos Global Industries' to 'Amanta Global Industries'
+    const migratedSpelling = localStorage.getItem('retailflow_amanta_migrated_v1');
+    if (!migratedSpelling) {
+      const settings = getStore<BillingSetting>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+      if (
+        !settings.businessName ||
+        settings.businessName.includes('Amantos Global Industries') ||
+        !settings.phone ||
+        settings.phone.includes('98765 43210') ||
+        settings.phone.includes('9876543210')
+      ) {
+        const updatedSettings: BillingSetting = {
+          ...settings,
+          businessName: 'Amanta Global Industries',
+          phone: '+91 91244 22670',
+        };
+        setStore(STORAGE_KEYS.SETTINGS, updatedSettings);
+      }
+      localStorage.setItem('retailflow_amanta_migrated_v1', 'true');
+    }
+
     // Ensure admin user exists and password is admin@123
     const users = getStore<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
     let adminUser = users.find((u) => u.username === 'admin');

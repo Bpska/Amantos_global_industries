@@ -87,17 +87,25 @@ export const InvoicesPage: React.FC = () => {
     try {
       const s = await api.getBillingSettings();
       if (s) {
+        // Auto-correct Amantos -> Amanta and old placeholder phone
+        const businessName = (!s.businessName || s.businessName.includes('Amantos'))
+          ? 'Amanta Global Industries'
+          : s.businessName;
+        const phone = (!s.phone || s.phone.includes('98765 43210') || s.phone.includes('9876543210'))
+          ? '+91 91244 22670'
+          : s.phone;
+
         setBillingSettings({
-          businessName: s.businessName || 'Amanta Global Industries',
+          businessName,
           tagline: s.tagline || 'Industrial & Commercial Distribution Network',
-          phone: s.phone || '+91 91244 22670',
+          phone,
           address: s.address || 'Main Commercial Hub, Bhubaneswar, Odisha',
           terms: s.terms || 'Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.',
           logoUrl: s.logoUrl || '/assets/brand/amantos-logo.jpg',
         });
-        setFormBusinessName(s.businessName || 'Amanta Global Industries');
+        setFormBusinessName(businessName);
         setFormTagline(s.tagline || 'Industrial & Commercial Distribution Network');
-        setFormPhone(s.phone || '+91 91244 22670');
+        setFormPhone(phone);
         setFormAddress(s.address || 'Main Commercial Hub, Bhubaneswar, Odisha');
         setFormTerms(s.terms || 'Goods once sold are subject to standard quality warranty. Please clear pending BAKI within 30 days of invoice date.');
         setFormLogoUrl(s.logoUrl || '/assets/brand/amantos-logo.jpg');
