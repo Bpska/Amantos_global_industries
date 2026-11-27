@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -38,6 +38,8 @@ export const ShopsPage: React.FC = () => {
   const [productsList, setProductsList] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const shopsRequest = useRef(0);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(initialStatus);
   const [salespersonId, setSalespersonId] = useState('');
@@ -214,6 +216,7 @@ export const ShopsPage: React.FC = () => {
   };
 
   const fetchShops = async () => {
+    const request = ++shopsRequest.current;
     try {
       setLoading(true);
       const res = await api.getShops({
@@ -225,12 +228,14 @@ export const ShopsPage: React.FC = () => {
         from: startDate ? new Date(startDate).toISOString() : undefined,
         to: endDate ? new Date(`${endDate}T23:59:59.999Z`).toISOString() : undefined,
       });
+      if (request !== shopsRequest.current) return;
       setShops(res.data);
       setTotal(res.total);
+      setTotalPages(Math.max(1, res.totalPages));
     } catch (e) {
       console.error('Failed to load shops:', e);
     } finally {
-      setLoading(false);
+      if (request === shopsRequest.current) setLoading(false);
     }
   };
 
@@ -845,7 +850,7 @@ export const ShopsPage: React.FC = () => {
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
+              disabled={loading || page <= 1}
               className="btn btn-outline"
               style={{ padding: '6px 12px' }}
             >
@@ -863,8 +868,8 @@ export const ShopsPage: React.FC = () => {
               Page {page}
             </span>
             <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={shops.length < 12}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={loading || page >= totalPages}
               className="btn btn-outline"
               style={{ padding: '6px 12px' }}
             >

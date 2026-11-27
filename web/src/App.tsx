@@ -1,39 +1,34 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { SessionStatus } from './components/SessionStatus';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AdminLayout } from './components/AdminLayout';
 import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { StaffDashboardPage, StaffProfilePage } from './pages/StaffDashboardPage';
-import { ShopsPage } from './pages/ShopsPage';
-import { SalespersonsPage } from './pages/SalespersonsPage';
-import { ReportsPage } from './pages/ReportsPage';
-import { ProductsPage } from './pages/ProductsPage';
-import { InvoicesPage } from './pages/InvoicesPage';
-import { PublicInvoicePage } from './pages/PublicInvoicePage';
 import { canAccessPanel, panelHome } from './services/access';
 import type { Role } from './types';
 
-const SessionLoading = () => (
-  <div className="session-loading" role="status">
-    <RefreshCw size={28} className="animate-spin" />
-    <p>Opening your HeyLane panel...</p>
-  </div>
-);
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
+const StaffDashboardPage = lazy(() => import('./pages/StaffDashboardPage').then((module) => ({ default: module.StaffDashboardPage })));
+const StaffProfilePage = lazy(() => import('./pages/StaffDashboardPage').then((module) => ({ default: module.StaffProfilePage })));
+const ShopsPage = lazy(() => import('./pages/ShopsPage').then((module) => ({ default: module.ShopsPage })));
+const SalespersonsPage = lazy(() => import('./pages/SalespersonsPage').then((module) => ({ default: module.SalespersonsPage })));
+const ReportsPage = lazy(() => import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })));
+const ProductsPage = lazy(() => import('./pages/ProductsPage').then((module) => ({ default: module.ProductsPage })));
+const InvoicesPage = lazy(() => import('./pages/InvoicesPage').then((module) => ({ default: module.InvoicesPage })));
+const PublicInvoicePage = lazy(() => import('./pages/PublicInvoicePage').then((module) => ({ default: module.PublicInvoicePage })));
 
 const ProtectedRoute: React.FC<{ role: Role; children: React.ReactNode }> = ({ role, children }) => {
-  const { user, token, isLoading } = useAuth();
-  if (isLoading) return <SessionLoading />;
+  const { user, token, isLoading, sessionError } = useAuth();
+  if (isLoading || sessionError) return <SessionStatus />;
   if (!token || !user) return <Navigate to="/login" replace />;
   if (!canAccessPanel(user.role, role)) return <Navigate to={panelHome(user.role)} replace />;
   return <>{children}</>;
 };
 
 const PanelRedirect = () => {
-  const { user, token, isLoading } = useAuth();
+  const { user, token, isLoading, sessionError } = useAuth();
   const location = useLocation();
-  if (isLoading) return <SessionLoading />;
+  if (isLoading || sessionError) return <SessionStatus />;
   if (!token || !user) return <Navigate to="/login" replace />;
   const legacyPages = ['/shops', '/products', '/invoices', '/salespersons', '/reports'];
   const suffix = legacyPages.includes(location.pathname) ? location.pathname + location.search : '';
@@ -45,6 +40,7 @@ export function App() {
   return (
     <AuthProvider>
       <BrowserRouter basename={base}>
+        <Suspense fallback={<div className="session-loading" role="status">Loading your screen...</div>}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/invoice/:id" element={<PublicInvoicePage />} />
@@ -71,6 +67,7 @@ export function App() {
           </Route>
           <Route path="*" element={<PanelRedirect />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

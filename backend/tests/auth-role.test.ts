@@ -9,6 +9,7 @@ import { Role } from '@prisma/client';
 jest.mock('../src/utils/prisma', () => ({
   prisma: {
     user: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
@@ -71,6 +72,29 @@ describe('Authentication & Role-Based Access Control', () => {
   });
 
   describe('JWT Authentication Middleware', () => {
+    it('rejects expired tokens before looking up the account', async () => {
+      const token = jwt.sign({ userId: mockAdminUser.id, role: Role.ADMIN }, env.JWT_SECRET, { expiresIn: -1 });
+      const res = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(401);
+      expect(res.body.message).toContain('expired');
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rejects signed tokens with missing claims instead of returning a database error', async () => {
+      const token = jwt.sign({ role: Role.ADMIN }, env.JWT_SECRET, { expiresIn: '1h' });
+      const res = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(401);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rejects a token belonging to a deleted user', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const res = await request(app).get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${generateToken(mockAdminUser.id, Role.ADMIN)}`);
+      expect(res.status).toBe(401);
+      expect(res.body.message).toContain('no longer exists');
+    });
+
     it('returns 401 when Authorization header is missing', async () => {
       const res = await request(app).get('/api/v1/auth/me');
 
@@ -113,6 +137,31 @@ describe('Authentication & Role-Based Access Control', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.username).toBe('sp_rajesh');
+      expect(res.headers['cache-control']).toBe('no-store');
+    });
+  });
+
+  describe('Login and profile restoration', () => {
+    it('returns a usable token and restores the same account', async () => {
+      const passwordHash = await bcrypt.hash('ActualPassword@123', 4);
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ ...mockAdminUser, passwordHash });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockAdminUser);
+      const login = await request(app).post('/api/v1/auth/login')
+        .send({ username: ' ADMIN ', password: 'ActualPassword@123' });
+      expect(login.status).toBe(200);
+      expect(login.body.data.user.passwordHash).toBeUndefined();
+      const profile = await request(app).get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${login.body.data.token}`);
+      expect(profile.status).toBe(200);
+      expect(profile.body.data.id).toBe(mockAdminUser.id);
+    });
+
+    it.each(['admin@123', 'AdminPassword@123', 'incorrect'])('rejects %s when it does not match the stored admin password', async (password) => {
+      const passwordHash = await bcrypt.hash('ChangedPassword@123', 4);
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ ...mockAdminUser, passwordHash });
+      const res = await request(app).post('/api/v1/auth/login').send({ username: 'admin', password });
+      expect(res.status).toBe(401);
+      expect(res.body.data?.token).toBeUndefined();
     });
   });
 

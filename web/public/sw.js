@@ -1,4 +1,4 @@
-const CACHE_NAME = 'heylane-pwa-v3-role-panels';
+const CACHE_NAME = 'heylane-pwa-v4-api-sessions';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -22,7 +22,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) => key.startsWith('heylane-pwa-') && key !== CACHE_NAME).map((key) => caches.delete(key))
       );
     })
   );
@@ -30,8 +30,19 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  // Session checks and business data always go directly to the API.
+  if (url.origin !== self.location.origin || /^\/api(?:\/|$)/.test(url.pathname) ||
+      event.request.headers.has('Authorization')) return;
+
   // Only handle GET requests
   if (event.request.method !== 'GET') return;
+
+  // Use the current app shell online; retain the cached shell for offline viewing.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request).catch(() => caches.match('/')));
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {

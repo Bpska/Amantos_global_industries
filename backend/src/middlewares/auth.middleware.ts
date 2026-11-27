@@ -31,7 +31,15 @@ export const authenticate = async (
 
     let decoded: DecodedToken;
     try {
-      decoded = jwt.verify(token, env.JWT_SECRET) as DecodedToken;
+      const payload = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
+      if (typeof payload === 'string' || !payload ||
+          typeof payload.userId !== 'string' || !payload.userId.trim() ||
+          (payload.role !== 'ADMIN' && payload.role !== 'SALESPERSON') ||
+          typeof payload.exp !== 'number') {
+        sendError(res, 'Invalid authentication token', 401);
+        return;
+      }
+      decoded = payload as DecodedToken;
     } catch (err: any) {
       if (err.name === 'TokenExpiredError') {
         sendError(res, 'Authentication token has expired', 401);

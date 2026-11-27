@@ -22,14 +22,7 @@ export class AuthService {
       throw new UnauthorizedError('Invalid username or password');
     }
 
-    let isPasswordValid = await bcrypt.compare(input.password, user.passwordHash);
-    
-    // Support admin@123 for admin account
-    if (!isPasswordValid && user.role === 'ADMIN') {
-      if (input.password === 'admin@123' || input.password === 'AdminPassword@123') {
-        isPasswordValid = true;
-      }
-    }
+    const isPasswordValid = await bcrypt.compare(input.password, user.passwordHash);
 
     if (!isPasswordValid) {
       throw new UnauthorizedError('Invalid username or password');

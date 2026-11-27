@@ -33,6 +33,12 @@ export function createApp(): Express {
   };
   app.use(cors(corsOptions));
 
+  // Authenticated API responses must never be reused from browser/proxy caches.
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   // Rate limiting (100 requests per minute per IP)
   const limiter = rateLimit({
     windowMs: 60 * 1000,

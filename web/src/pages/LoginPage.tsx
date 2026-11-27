@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Lock, User, AlertCircle, ArrowRight, ShieldCheck, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
+import { api, getApiErrorMessage } from '../services/api';
+import { SessionStatus } from '../components/SessionStatus';
 import { HeyLaneLogo } from '../components/HeyLaneLogo';
 import { InstallAppButton } from '../components/InstallAppButton';
 import { panelHome } from '../services/access';
@@ -13,14 +14,8 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login, user, token, isLoading } = useAuth();
+  const { login, user, token, isLoading, sessionError } = useAuth();
   const navigate = useNavigate();
-
-  const handleAdminFill = () => {
-    setUsername('admin');
-    setPassword('admin@123');
-    setError('');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,18 +26,15 @@ export const LoginPage: React.FC = () => {
       const res = await api.login({ username: username.trim(), password });
       login(res.token, res.user);
       navigate(panelHome(res.user.role), { replace: true });
-    } catch (err: any) {
-      setError(
-        err.response?.data?.message ||
-          err.message ||
-          'Authentication failed. Please verify credentials.'
-      );
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Authentication failed. Please verify credentials.'));
     } finally {
       setLoading(false);
     }
   };
 
-  if (!isLoading && token && user) return <Navigate to={panelHome(user.role)} replace />;
+  if (isLoading || sessionError) return <SessionStatus />;
+  if (token && user) return <Navigate to={panelHome(user.role)} replace />;
 
   return (
     <div className="login-page">
@@ -76,50 +68,8 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Administrator Quick Sign In Shortcut */}
-        <div
-          style={{
-            backgroundColor: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '12px',
-            marginBottom: '18px',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: 'var(--muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              textAlign: 'center',
-              marginBottom: '8px',
-            }}
-          >
-            System Administrator Access
-          </div>
-          <button
-            type="button"
-            onClick={handleAdminFill}
-            className="demo-shortcut-btn"
-            style={{
-              width: '100%',
-              padding: '10px',
-              textAlign: 'center',
-              backgroundColor: '#FAFDFB',
-              border: '1px solid #BBF7D0',
-            }}
-          >
-            <div style={{ fontWeight: 800, color: '#007F5F' }}>Fill Administrator Credentials</div>
-            <div style={{ fontSize: '11px', opacity: 0.85, fontWeight: 600, color: '#334155', marginTop: '2px' }}>
-              Username: <strong>admin</strong> · Password: <strong>admin@123</strong>
-            </div>
-          </button>
-        </div>
-
         {error && (
-          <div className="login-error-box">
+          <div className="login-error-box" role="alert">
             <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#DC2626' }} />
             <div>{error}</div>
           </div>
@@ -127,11 +77,12 @@ export const LoginPage: React.FC = () => {
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '18px' }}>
-            <label className="heylane-label" style={{ marginBottom: '8px' }}>
+            <label htmlFor="username" className="heylane-label" style={{ marginBottom: '8px' }}>
               Username / Account ID
             </label>
             <div style={{ position: 'relative' }}>
               <input
+                id="username"
                 type="text"
                 className="heylane-input"
                 value={username}
@@ -149,9 +100,10 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div style={{ marginBottom: '22px' }}>
-            <label className="heylane-label">Security Keyphrase</label>
+            <label htmlFor="password" className="heylane-label">Security Keyphrase</label>
             <div style={{ position: 'relative' }}>
               <input
+                id="password"
                 type="password"
                 className="heylane-input"
                 value={password}

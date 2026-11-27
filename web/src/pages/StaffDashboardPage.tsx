@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Banknote, PlusCircle, Receipt, RefreshCw, Store, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
+import { api, getApiErrorMessage } from '../services/api';
 import type { DashboardSummary } from '../types';
 import './StaffDashboardPage.css';
 
@@ -20,7 +20,7 @@ export function StaffDashboardPage() {
     let active = true;
     setError('');
     api.getDashboard().then((data) => { if (active) setSummary(data); })
-      .catch((err: Error) => { if (active) setError(err.message || 'Unable to load your dashboard.'); });
+      .catch((err: unknown) => { if (active) setError(getApiErrorMessage(err, 'Unable to load your dashboard.')); });
     return () => { active = false; };
   }, [user?.id, refresh]);
 

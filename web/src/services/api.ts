@@ -9,11 +9,13 @@ import type {
   User,
 } from '../types';
 import { localDb } from './localDatabase.ts';
+import { expireSession, getStoredToken } from './session.ts';
 
 const API_BASE = '/api/v1';
 
 export const apiClient = axios.create({
   baseURL: API_BASE,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -23,8 +25,8 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use((config) => {
   try {
     if (typeof localStorage !== 'undefined') {
-      const token = localStorage.getItem('retailflow_admin_jwt');
-      if (token && !config.headers.Authorization) {
+      const token = getStoredToken();
+      if (token && config.url !== '/auth/login' && !config.headers.Authorization) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
@@ -34,7 +36,18 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+apiClient.interceptors.response.use((response) => response, (error) => {
+  if (axios.isAxiosError(error) && error.response?.status === 401 && error.config?.url !== '/auth/login') {
+    const authorization = error.config?.headers?.Authorization;
+    if (typeof authorization === 'string' && authorization.startsWith('Bearer ')) {
+      expireSession(authorization.slice(7));
+    }
+  }
+  return Promise.reject(error);
+});
+
 const defaultAdapter = apiClient.defaults.adapter;
+const pendingProfiles = new Map<string, Promise<User>>();
 
 const unwrap = <T>(res: any): T => {
   if (res.data && res.data.data !== undefined) {
@@ -71,11 +84,7 @@ export const getApiErrorMessage = (error: unknown, fallback: string): string => 
 // Check if running in a real browser (window.location defined) vs Node.js test harness
 const isLiveBrowser = typeof window !== 'undefined' && typeof (window as any).location?.href === 'string';
 
-/**
- * 100% PostgreSQL Backend API Service
- * In browser: calls Express backend + PostgreSQL (password: bps).
- * In Node test environment: satisfies unit testing contracts.
- */
+// Browser requests use the backend. Legacy local-data tests use their local adapter.
 export const api = {
   // Auth
   async login(credentials: { username: string; password?: string }): Promise<{ token: string; user: User }> {
@@ -84,19 +93,22 @@ export const api = {
     }
     const res = await apiClient.post('/auth/login', credentials);
     const data = unwrap<{ token: string; user: User }>(res);
-    if (data?.token && data?.user && typeof localStorage !== 'undefined') {
-      localStorage.setItem('retailflow_admin_jwt', data.token);
-      localStorage.setItem('retailflow_admin_user', JSON.stringify(data.user));
-    }
     return data;
   },
 
-  async me(): Promise<User> {
+  async me(token = getStoredToken()): Promise<User> {
     if (!isLiveBrowser && apiClient.defaults.adapter === defaultAdapter) {
       return localDb.me();
     }
-    const res = await apiClient.get('/auth/me');
-    return unwrap<User>(res);
+    const key = token || '';
+    let pending = pendingProfiles.get(key);
+    if (!pending) {
+      pending = apiClient.get('/auth/me', {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      }).then((res) => unwrap<User>(res)).finally(() => { pendingProfiles.delete(key); });
+      pendingProfiles.set(key, pending);
+    }
+    return pending;
   },
 
   // Dashboard Aggregates

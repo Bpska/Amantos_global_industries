@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -12,7 +12,7 @@ import {
   ChevronRight,
   Calendar,
 } from 'lucide-react';
-import { api } from '../services/api';
+import { api, getApiErrorMessage } from '../services/api';
 import { formatDayAndDate } from '../utils/dateUtils';
 import type { DashboardSummary } from '../types';
 
@@ -20,24 +20,30 @@ export const DashboardPage: React.FC = () => {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const requestVersion = useRef(0);
   const [datePreset, setDatePreset] = useState<'all' | 'today' | '7days' | 'month' | 'custom'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const navigate = useNavigate();
 
   const loadDashboard = async (fromVal = startDate, toVal = endDate) => {
+    const currentVersion = ++requestVersion.current;
     try {
       setRefreshing(true);
+      setError('');
       const params: { startDate?: string; endDate?: string } = {};
       if (fromVal) params.startDate = fromVal;
       if (toVal) params.endDate = toVal;
       const res = await api.getDashboard(Object.keys(params).length > 0 ? params : undefined);
-      setData(res);
+      if (requestVersion.current === currentVersion) setData(res);
     } catch (e) {
-      console.error('Failed to load dashboard:', e);
+      if (requestVersion.current === currentVersion) setError(getApiErrorMessage(e, 'Unable to load your dashboard.'));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestVersion.current === currentVersion) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -83,6 +89,7 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     loadDashboard();
+    return () => { requestVersion.current++; };
   }, []);
 
   const formatMoney = (val: number) => `₹${Number(val || 0).toLocaleString('en-IN')}`;
@@ -110,6 +117,11 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div>
+      {error && <div className="card load-error" role="alert">
+        <AlertTriangle size={22} />
+        <p>{error}</p>
+        <button className="btn btn-outline" onClick={() => loadDashboard()} disabled={refreshing}>Try again</button>
+      </div>}
       {/* Top Banner Actions */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -132,6 +144,7 @@ export const DashboardPage: React.FC = () => {
         </button>
       </div>
 
+      {!data ? null : <>
       {/* Date Filter Strip */}
       <div className="card" style={{ padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -503,6 +516,7 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+      </>}
     </div>
   );
 };
